@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Search, X, Cpu, PlusCircle, RefreshCw, Tv } from 'lucide-react';
+import { Search, X, Cpu, PlusCircle, RefreshCw, Tv, FileCode2 } from 'lucide-react';
 import { SystemStats } from '../types';
 
 interface HeaderProps {
@@ -79,8 +79,20 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Right Action Tools (Pi Monitor, Custom M3U, Sync) */}
+      {/* Right Action Tools (Swagger API, Custom M3U, Pi Monitor, Sync) */}
       <div className="flex items-center gap-2.5 shrink-0">
+        {/* Swagger API Docs link */}
+        <a
+          href="/docs"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-surface hover:bg-surface-hover text-slate-200 text-xs font-semibold border border-surface-border transition-all"
+          title="Interactive OpenAPI / Swagger Documentation"
+        >
+          <FileCode2 className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="hidden sm:inline">Swagger API</span>
+        </a>
+
         {/* Custom M3U loader */}
         <button
           onClick={onOpenCustomM3U}
