@@ -40,18 +40,18 @@ async def stop_dvr(req: StopDvrRequest):
     return {"status": "ok", "stopped": success}
 
 
-@router.delete("/{channel_id}")
-async def delete_dvr(channel_id: str):
-    """Delete DVR buffer and files for a channel."""
-    success = dvr_service.delete_recording(channel_id)
-    return {"status": "ok", "deleted": success}
-
-
 @router.get("/status")
 async def get_all_dvr_status():
     """Retrieve status, buffer duration, and storage stats for all 12h DVR recordings."""
     recordings = dvr_service.get_status()
     return {"recordings": recordings}
+
+
+@router.delete("/{channel_id}")
+async def delete_dvr(channel_id: str):
+    """Delete DVR buffer and files for a channel."""
+    success = dvr_service.delete_recording(channel_id)
+    return {"status": "ok", "deleted": success}
 
 
 @router.get("/{channel_id}/status")
