@@ -1,0 +1,52 @@
+services:
+  backend:
+    build: ./backend
+    container_name: pkptv-api
+    ports:
+      - "8085:8085"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8085
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_JSON=${LOG_JSON:-true}
+      - DEBUG=${DEBUG:-false}
+    volumes:
+      - ./data:/app/data
+      - /sys:/host_sys:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  web:
+    build: ./frontend
+    container_name: pkptv-web
+    ports:
+      - "3005:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  logs:
+    image: amir20/dozzle:latest
+    container_name: pkptv-logs
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8889:8080"
+    restart: unless-stopped
+
+volumes:
+  data:
