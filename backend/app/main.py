@@ -13,6 +13,7 @@ from app.api.v1.countries import router as countries_router
 from app.api.v1.proxy import router as proxy_router
 from app.api.v1.system import router as system_router
 from app.api.v1.playlists import router as playlists_router
+from app.api.v1.vod import router as vod_router
 
 # Initialize structured logging
 setup_logging(level=settings.LOG_LEVEL, json_format=settings.LOG_JSON)
@@ -63,6 +64,7 @@ app.include_router(countries_router, prefix="/api/v1")
 app.include_router(proxy_router, prefix="/api/v1")
 app.include_router(system_router, prefix="/api/v1")
 app.include_router(playlists_router, prefix="/api/v1")
+app.include_router(vod_router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["system"])

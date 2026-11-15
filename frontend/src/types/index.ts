@@ -33,6 +33,38 @@ export interface Country {
   count: number;
 }
 
+export interface VodItem {
+  id: string;
+  title: string;
+  type?: 'movie' | 'show';
+  country?: string;
+  poster: string;
+  backdrop?: string;
+  rating?: string;
+  year?: string;
+  duration?: string;
+  seasons?: string;
+  genres: string[];
+  provider?: string;
+  provider_logo?: string;
+  provider_url?: string;
+  description?: string;
+  stream_url?: string;
+  is_streamable?: boolean;
+  quality?: string;
+}
+
+export interface StreamingProvider {
+  id: string;
+  name: string;
+  color: string;
+  accent: string;
+  icon: string;
+  url: string;
+  description: string;
+  badge: string;
+}
+
 export interface SystemStats {
   platform: {
     system: string;

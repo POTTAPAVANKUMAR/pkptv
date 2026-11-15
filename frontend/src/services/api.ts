@@ -1,4 +1,4 @@
-import { Category, Channel, Country, SystemStats } from '../types';
+import { Category, Channel, Country, SystemStats, VodItem, StreamingProvider } from '../types';
 
 const API_BASE = '/api/v1';
 
@@ -75,6 +75,36 @@ export const api = {
     if (!res.ok) throw new Error(`Failed to upload file: HTTP ${res.status}`);
     const data = await res.json();
     return data.channels || [];
+  },
+
+  async getFeatured(): Promise<VodItem[]> {
+    const res = await fetch(`${API_BASE}/vod/featured`);
+    if (!res.ok) throw new Error(`Failed to load featured billboard: HTTP ${res.status}`);
+    const data = await res.json();
+    return data.featured || [];
+  },
+
+  async getMovies(country?: string): Promise<VodItem[]> {
+    const query = country && country !== 'all' ? `?country=${country}` : '';
+    const res = await fetch(`${API_BASE}/vod/movies${query}`);
+    if (!res.ok) throw new Error(`Failed to load movies: HTTP ${res.status}`);
+    const data = await res.json();
+    return data.movies || [];
+  },
+
+  async getShows(country?: string): Promise<VodItem[]> {
+    const query = country && country !== 'all' ? `?country=${country}` : '';
+    const res = await fetch(`${API_BASE}/vod/shows${query}`);
+    if (!res.ok) throw new Error(`Failed to load shows: HTTP ${res.status}`);
+    const data = await res.json();
+    return data.shows || [];
+  },
+
+  async getProviders(): Promise<StreamingProvider[]> {
+    const res = await fetch(`${API_BASE}/vod/providers`);
+    if (!res.ok) throw new Error(`Failed to load streaming providers: HTTP ${res.status}`);
+    const data = await res.json();
+    return data.providers || [];
   },
 
   getProxiedStreamUrl(originalUrl: string): string {
