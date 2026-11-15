@@ -2,10 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies for psutil and network tools
+# Install system dependencies for psutil, ffmpeg DVR capture, and network tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     curl \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

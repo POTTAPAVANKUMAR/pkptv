@@ -1,4 +1,4 @@
-import { Category, Channel, Country, SystemStats, VodItem, StreamingProvider } from '../types';
+import { Category, Channel, Country, SystemStats, VodItem, StreamingProvider, DvrRecording } from '../types';
 
 const API_BASE = '/api/v1';
 
@@ -109,5 +109,60 @@ export const api = {
 
   getProxiedStreamUrl(originalUrl: string): string {
     return `${API_BASE}/proxy/stream?url=${encodeURIComponent(originalUrl)}`;
+  },
+
+  async startDvr(
+    channel_id: string,
+    stream_url: string,
+    channel_name?: string,
+    channel_logo?: string
+  ): Promise<DvrRecording> {
+    const res = await fetch(`${API_BASE}/dvr/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        channel_id,
+        stream_url,
+        channel_name,
+        channel_logo,
+      }),
+    });
+    if (!res.ok) throw new Error(`Failed to start DVR: HTTP ${res.status}`);
+    const data = await res.json();
+    return data.dvr;
+  },
+
+  async stopDvr(channel_id: string): Promise<boolean> {
+    const res = await fetch(`${API_BASE}/dvr/stop`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel_id }),
+    });
+    if (!res.ok) throw new Error(`Failed to stop DVR: HTTP ${res.status}`);
+    const data = await res.json();
+    return data.stopped;
+  },
+
+  async deleteDvr(channel_id: string): Promise<boolean> {
+    const res = await fetch(`${API_BASE}/dvr/${channel_id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error(`Failed to delete DVR: HTTP ${res.status}`);
+    const data = await res.json();
+    return data.deleted;
+  },
+
+  async getAllDvrStatus(): Promise<DvrRecording[]> {
+    const res = await fetch(`${API_BASE}/dvr/status`);
+    if (!res.ok) throw new Error(`Failed to get DVR status: HTTP ${res.status}`);
+    const data = await res.json();
+    return data.recordings || [];
+  },
+
+  async getChannelDvrStatus(channel_id: string): Promise<DvrRecording | null> {
+    const res = await fetch(`${API_BASE}/dvr/${channel_id}/status`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.is_active !== undefined ? data : null;
   },
 };

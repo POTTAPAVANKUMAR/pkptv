@@ -6,6 +6,7 @@ import { ChannelCard } from './components/ChannelCard';
 import { Player } from './components/Player';
 import { SystemStatsModal } from './components/SystemStatsModal';
 import { CustomPlaylistModal } from './components/CustomPlaylistModal';
+import { DvrModal } from './components/DvrModal';
 import { api } from './services/api';
 import { Category, Channel, Country, SystemStats, VodItem } from './types';
 import {
@@ -51,6 +52,8 @@ export const App: React.FC = () => {
 
   const [isStatsOpen, setIsStatsOpen] = useState<boolean>(false);
   const [isCustomM3UOpen, setIsCustomM3UOpen] = useState<boolean>(false);
+  const [isDvrOpen, setIsDvrOpen] = useState<boolean>(false);
+  const [activeDvrCount, setActiveDvrCount] = useState<number>(0);
   const [customPlaylist, setCustomPlaylist] = useState<{ name: string; channels: Channel[] } | null>(null);
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -144,6 +147,25 @@ export const App: React.FC = () => {
     }, 15000);
 
     return () => clearInterval(interval);
+  }, []);
+
+  // Poll Active 12h DVR buffer count
+  useEffect(() => {
+    let mounted = true;
+    const fetchDvr = async () => {
+      try {
+        const list = await api.getAllDvrStatus();
+        if (mounted) {
+          setActiveDvrCount(list.filter((r) => r.is_active).length);
+        }
+      } catch {}
+    };
+    fetchDvr();
+    const interval = setInterval(fetchDvr, 10000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   // Fetch Channels for the Live / Grid View
@@ -350,6 +372,8 @@ export const App: React.FC = () => {
         systemStats={systemStats}
         onOpenStats={() => setIsStatsOpen(true)}
         onOpenCustomM3U={() => setIsCustomM3UOpen(true)}
+        onOpenDvr={() => setIsDvrOpen(true)}
+        activeDvrCount={activeDvrCount}
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
         watchlistCount={favorites.length}
@@ -911,6 +935,13 @@ export const App: React.FC = () => {
           setCustomPlaylist({ name, channels: importedChannels });
           setActiveTab('live');
         }}
+      />
+
+      {/* 12-Hour Sliding Window DVR Manager Modal */}
+      <DvrModal
+        isOpen={isDvrOpen}
+        onClose={() => setIsDvrOpen(false)}
+        onSelectChannel={handleSelectChannel}
       />
     </div>
   );

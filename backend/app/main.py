@@ -14,6 +14,8 @@ from app.api.v1.proxy import router as proxy_router
 from app.api.v1.system import router as system_router
 from app.api.v1.playlists import router as playlists_router
 from app.api.v1.vod import router as vod_router
+from app.api.v1.dvr import router as dvr_router
+from app.services.dvr_service import dvr_service
 
 # Initialize structured logging
 setup_logging(level=settings.LOG_LEVEL, json_format=settings.LOG_JSON)
@@ -33,6 +35,7 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    dvr_service.shutdown()
     logger.info(f"Shutting down {settings.APP_NAME}. Goodbye!")
 
 
@@ -65,6 +68,7 @@ app.include_router(proxy_router, prefix="/api/v1")
 app.include_router(system_router, prefix="/api/v1")
 app.include_router(playlists_router, prefix="/api/v1")
 app.include_router(vod_router, prefix="/api/v1")
+app.include_router(dvr_router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["system"])

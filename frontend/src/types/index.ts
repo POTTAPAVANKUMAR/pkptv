@@ -105,3 +105,20 @@ export interface SystemStats {
     last_synced: number;
   };
 }
+
+export interface DvrRecording {
+  channel_id: string;
+  channel_name: string;
+  channel_logo?: string;
+  stream_url: string;
+  started_at: number;
+  playlist_path?: string;
+  dvr_url: string;
+  max_window_hours: number;
+  is_active: boolean;
+  size_mb: number;
+  segments_count: number;
+  buffered_seconds: number;
+  buffered_display: string;
+  elapsed_seconds: number;
+}

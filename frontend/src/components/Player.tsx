@@ -20,7 +20,7 @@ import {
   Radio,
   X,
 } from 'lucide-react';
-import { Channel } from '../types';
+import { Channel, DvrRecording } from '../types';
 import { api } from '../services/api';
 
 interface PlayerProps {
@@ -80,10 +80,60 @@ export const Player: React.FC<PlayerProps> = ({
   const [isLiveStream, setIsLiveStream] = useState<boolean>(true);
   const [isAtLiveEdge, setIsAtLiveEdge] = useState<boolean>(true);
 
-  // Determine stream URL (direct or proxied)
-  const streamUrl = useProxy
-    ? api.getProxiedStreamUrl(channel.stream_url)
-    : channel.stream_url;
+  // 12-Hour Rolling DVR State
+  const [dvrRecording, setDvrRecording] = useState<DvrRecording | null>(null);
+  const [isWatchingDvr, setIsWatchingDvr] = useState<boolean>(false);
+  const [isStartingDvr, setIsStartingDvr] = useState<boolean>(false);
+
+  // Check DVR recording status for this channel
+  useEffect(() => {
+    let active = true;
+    const checkDvr = async () => {
+      try {
+        const stat = await api.getChannelDvrStatus(channel.id);
+        if (active) {
+          setDvrRecording(stat);
+        }
+      } catch {}
+    };
+    checkDvr();
+    const timer = setInterval(checkDvr, 8000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [channel.id]);
+
+  // Determine stream URL (DVR, proxied, or direct)
+  const streamUrl =
+    isWatchingDvr && dvrRecording?.dvr_url
+      ? dvrRecording.dvr_url
+      : useProxy
+      ? api.getProxiedStreamUrl(channel.stream_url)
+      : channel.stream_url;
+
+  const handleToggleDvr = async () => {
+    if (dvrRecording?.is_active) {
+      setIsWatchingDvr((prev) => !prev);
+    } else {
+      setIsStartingDvr(true);
+      try {
+        const rec = await api.startDvr(
+          channel.id,
+          channel.stream_url,
+          channel.name,
+          channel.logo
+        );
+        setDvrRecording(rec);
+        // Switch to watching DVR once first segments are ready
+        setTimeout(() => setIsWatchingDvr(true), 4000);
+      } catch (err) {
+        console.error('Failed to start DVR:', err);
+      } finally {
+        setIsStartingDvr(false);
+      }
+    }
+  };
 
   // Initialize and attach HLS stream
   const setupStream = useCallback(() => {
@@ -528,6 +578,41 @@ export const Player: React.FC<PlayerProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* 12-Hour Rolling DVR Button */}
+          <button
+            onClick={handleToggleDvr}
+            disabled={isStartingDvr}
+            title={
+              isWatchingDvr
+                ? 'Watching 12-hour DVR buffer. Click to switch to direct live.'
+                : dvrRecording?.is_active
+                ? `12h DVR Active (${dvrRecording.buffered_display}). Click to watch DVR buffer.`
+                : 'Start 12-Hour Rolling DVR buffer on Raspberry Pi'
+            }
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+              isWatchingDvr
+                ? 'bg-rose-600 text-white shadow-[0_0_15px_rgba(225,29,72,0.6)]'
+                : dvrRecording?.is_active
+                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30'
+                : 'bg-white/10 text-slate-300 hover:bg-white/20'
+            }`}
+          >
+            <Radio
+              className={`w-3.5 h-3.5 ${
+                dvrRecording?.is_active ? 'animate-pulse text-rose-400' : ''
+              }`}
+            />
+            <span>
+              {isStartingDvr
+                ? 'Starting DVR...'
+                : isWatchingDvr
+                ? '12h DVR (Playing)'
+                : dvrRecording?.is_active
+                ? `12h DVR (${dvrRecording.buffered_display})`
+                : '+ 12h DVR'}
+            </span>
+          </button>
+
           {/* Proxy status toggle */}
           <button
             onClick={() => setUseProxy(!useProxy)}

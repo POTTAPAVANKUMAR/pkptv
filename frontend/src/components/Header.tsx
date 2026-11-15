@@ -26,6 +26,8 @@ interface HeaderProps {
   systemStats: SystemStats | null;
   onOpenStats: () => void;
   onOpenCustomM3U: () => void;
+  onOpenDvr: () => void;
+  activeDvrCount?: number;
   onRefresh: () => void;
   isRefreshing: boolean;
   watchlistCount: number;
@@ -41,6 +43,8 @@ export const Header: React.FC<HeaderProps> = ({
   systemStats,
   onOpenStats,
   onOpenCustomM3U,
+  onOpenDvr,
+  activeDvrCount = 0,
   onRefresh,
   isRefreshing,
   watchlistCount,
@@ -131,6 +135,21 @@ export const Header: React.FC<HeaderProps> = ({
             <FileCode2 className="w-3.5 h-3.5 text-cyan-400" />
             <span className="hidden lg:inline">API Docs</span>
           </a>
+
+          {/* 12-Hour Rolling DVR Manager */}
+          <button
+            onClick={onOpenDvr}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-xs font-semibold border border-rose-500/30 transition-all"
+            title="Manage 12-Hour Rolling DVR Buffers"
+          >
+            <Radio className="w-3.5 h-3.5 text-rose-400" />
+            <span className="hidden lg:inline">12h DVR</span>
+            {activeDvrCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-black">
+                {activeDvrCount}
+              </span>
+            )}
+          </button>
 
           {/* Add custom M3U */}
           <button
