@@ -24,7 +24,7 @@ An ultra-modern, high-performance IPTV streaming web player and channel director
   - Live diagnostics widget showing CPU load, CPU temperature (`°C`), RAM usage, disk usage, and uptime in the header.
 - **Production Logging & Observability**:
   - Structured request logging with UUID `X-Request-ID` tracing, response latency timing (`ms`), and client IP.
-  - Integrated **Dozzle** real-time container log viewer.
+  - Compatible with unified Pi container logging dashboards (Dozzle).
 
 ---
 
@@ -46,7 +46,7 @@ pkptv/
 │   │   └── types/            # TypeScript schemas
 │   ├── Dockerfile
 │   └── nginx.conf            # Reverse proxy + SPA server
-├── docker-compose.yml        # Multi-container orchestration (API + Web + Dozzle)
+├── docker-compose.yml        # Multi-container orchestration (API + Web)
 ├── start-dev.sh              # One-command local startup script
 ├── DEPLOYMENT_PI.md          # Raspberry Pi & Cloudflare Tunnel guide
 └── README.md

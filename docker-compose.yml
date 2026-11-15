@@ -39,14 +39,5 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  logs:
-    image: amir20/dozzle:latest
-    container_name: pkptv-logs
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    ports:
-      - "8889:8080"
-    restart: unless-stopped
-
 volumes:
   data:
