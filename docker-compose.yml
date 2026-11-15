@@ -11,7 +11,7 @@ services:
       - LOG_JSON=${LOG_JSON:-true}
       - DEBUG=${DEBUG:-false}
     volumes:
-      - ./data:/app/data
+      - ./backend/data:/app/data
       - /sys:/host_sys:ro
     restart: unless-stopped
     healthcheck:
