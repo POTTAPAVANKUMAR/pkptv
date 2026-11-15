@@ -11,11 +11,10 @@ import {
   Film,
   Radio,
   Bookmark,
-  Compass,
 } from 'lucide-react';
 import { SystemStats } from '../types';
 
-export type ActiveTab = 'foryou' | 'live' | 'movies' | 'shows' | 'apps' | 'watchlist';
+export type ActiveTab = 'foryou' | 'live' | 'movies' | 'shows' | 'watchlist';
 
 interface HeaderProps {
   activeTab: ActiveTab;
@@ -64,13 +63,12 @@ export const Header: React.FC<HeaderProps> = ({
 
   const navItems: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
     { id: 'foryou', label: 'For You', icon: <Sparkles className="w-3.5 h-3.5" /> },
-    { id: 'live', label: 'Live TV', icon: <Radio className="w-3.5 h-3.5" /> },
-    { id: 'movies', label: 'Movies', icon: <Film className="w-3.5 h-3.5" /> },
-    { id: 'shows', label: 'Shows', icon: <Tv className="w-3.5 h-3.5" /> },
-    { id: 'apps', label: 'Apps & Hub', icon: <Compass className="w-3.5 h-3.5" /> },
+    { id: 'movies', label: 'Live Movies', icon: <Film className="w-3.5 h-3.5" /> },
+    { id: 'shows', label: 'TV Series', icon: <Tv className="w-3.5 h-3.5" /> },
+    { id: 'live', label: 'All Channels', icon: <Radio className="w-3.5 h-3.5" /> },
     {
       id: 'watchlist',
-      label: `Watchlist${watchlistCount > 0 ? ` (${watchlistCount})` : ''}`,
+      label: `Favorites${watchlistCount > 0 ? ` (${watchlistCount})` : ''}`,
       icon: <Bookmark className="w-3.5 h-3.5" />,
     },
   ];

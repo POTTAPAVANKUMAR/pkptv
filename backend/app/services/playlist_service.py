@@ -60,14 +60,15 @@ class PlaylistService:
 
         async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
             try:
-                # Fetch categories, countries, streams, and channels in parallel
+                # Fetch categories, countries, streams, channels, and logos in parallel
                 cat_req = client.get(f"{settings.IPTV_ORG_API_BASE}/categories.json")
                 country_req = client.get(f"{settings.IPTV_ORG_API_BASE}/countries.json")
                 stream_req = client.get(f"{settings.IPTV_ORG_API_BASE}/streams.json")
                 chan_req = client.get(f"{settings.IPTV_ORG_API_BASE}/channels.json")
+                logo_req = client.get(f"{settings.IPTV_ORG_API_BASE}/logos.json")
 
-                res_cat, res_country, res_stream, res_chan = await asyncio.gather(
-                    cat_req, country_req, stream_req, chan_req, return_exceptions=True
+                res_cat, res_country, res_stream, res_chan, res_logo = await asyncio.gather(
+                    cat_req, country_req, stream_req, chan_req, logo_req, return_exceptions=True
                 )
 
                 if any(isinstance(r, Exception) for r in (res_cat, res_country, res_stream, res_chan)):
@@ -78,6 +79,19 @@ class PlaylistService:
                 raw_countries = res_country.json() if res_country.status_code == 200 else []
                 raw_streams = res_stream.json() if res_stream.status_code == 200 else []
                 raw_channels = res_chan.json() if res_chan.status_code == 200 else []
+                raw_logos = (
+                    res_logo.json()
+                    if not isinstance(res_logo, Exception) and res_logo.status_code == 200
+                    else []
+                )
+
+                # Index official logos
+                logo_map: Dict[str, str] = {}
+                for l in raw_logos:
+                    if isinstance(l, dict) and l.get("channel") and l.get("url"):
+                        cid = l["channel"]
+                        if cid not in logo_map or l.get("in_use"):
+                            logo_map[cid] = l["url"]
 
                 # Build lookup map for channels by id
                 channel_info_map = {c["id"]: c for c in raw_channels if isinstance(c, dict) and "id" in c}
@@ -119,7 +133,7 @@ class PlaylistService:
                         "id": chan_id,
                         "name": chan_meta.get("name") or primary_stream.get("title") or chan_id,
                         "alt_names": chan_meta.get("alt_names") or [],
-                        "logo": chan_meta.get("logo") or "",
+                        "logo": logo_map.get(chan_id) or chan_meta.get("logo") or "",
                         "country": country_code,
                         "country_name": country_info.get("name", country_code),
                         "country_flag": country_info.get("flag", "🌐"),
@@ -232,6 +246,48 @@ class PlaylistService:
 
     def get_channel(self, channel_id: str) -> Optional[Dict[str, Any]]:
         return self.channels_by_id.get(channel_id)
+
+    def get_spotlight_channels(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Returns top curated live channels with official broadcaster logos and streams for billboard."""
+        priority_ids = [
+            "ZeeCinema.in",
+            "StarPlus.in",
+            "Colors.in",
+            "AsianetMovies.in",
+            "ColorsCineplex.in",
+            "AajTak.in",
+            "24HourFreeMovies.us",
+            "B4UMovies.in",
+            "RetroMovies.us",
+            "70sCinema.us",
+            "AlankarTV.in",
+            "AllTimeMovies.in",
+        ]
+        spotlights: List[Dict[str, Any]] = []
+        seen = set()
+
+        # Add priority channels that exist and have logos
+        for pid in priority_ids:
+            chan = self.channels_by_id.get(pid)
+            if chan and chan.get("logo") and chan.get("stream_url"):
+                spotlights.append(chan)
+                seen.add(chan["id"])
+
+        # Fill remaining slots with top movie and entertainment channels with logos
+        if len(spotlights) < limit:
+            for chan in self.channels:
+                if chan["id"] in seen or not chan.get("logo") or not chan.get("stream_url"):
+                    continue
+                cats = chan.get("categories", [])
+                if chan.get("country") in ("IN", "US") and any(
+                    c in cats for c in ("movies", "entertainment", "classic", "series")
+                ):
+                    spotlights.append(chan)
+                    seen.add(chan["id"])
+                    if len(spotlights) >= limit:
+                        break
+
+        return spotlights[:limit]
 
     @staticmethod
     def parse_m3u_text(content: str) -> List[Dict[str, Any]]:

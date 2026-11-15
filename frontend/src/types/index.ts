@@ -38,6 +38,8 @@ export interface VodItem {
   title: string;
   type?: 'movie' | 'show';
   country?: string;
+  country_name?: string;
+  country_flag?: string;
   poster: string;
   backdrop?: string;
   rating?: string;

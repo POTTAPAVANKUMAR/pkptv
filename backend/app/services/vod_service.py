@@ -1,319 +1,83 @@
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+from app.services.playlist_service import playlist_service
 
 logger = logging.getLogger("pkp_tv.vod")
 
-# Curated High-Definition VOD Showcase (Movies, TV Shows, and Streaming Specials)
-# Includes legal open streams, high-res posters, backdrops, and Hotstar/Netflix/Prime provider metadata.
-FEATURED_BILLBOARD: List[Dict[str, Any]] = [
-    {
-        "id": "bb-1",
-        "title": "Kalki 2898 AD",
-        "type": "movie",
-        "country": "IN",
-        "backdrop": "https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=1920&q=80",
-        "poster": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=600&q=80",
-        "rating": "8.7",
-        "year": "2024",
-        "duration": "2h 58m",
-        "genres": ["Sci-Fi", "Action", "Mythology"],
-        "provider": "Hotstar",
-        "provider_logo": "🌟",
-        "provider_url": "https://www.hotstar.com",
-        "description": "In a post-apocalyptic world in the year 2898 AD, a modern avatar of Vishnu descends to Earth to protect mankind from dark forces.",
-        "stream_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-        "is_streamable": True,
-        "quality": "4K HDR",
-    },
-    {
-        "id": "bb-2",
-        "title": "Stranger Things — Final Chapter",
-        "type": "show",
-        "country": "US",
-        "backdrop": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1920&q=80",
-        "poster": "https://images.unsplash.com/photo-1618336753974-aae8e04506aa?auto=format&fit=crop&w=600&q=80",
-        "rating": "8.8",
-        "year": "2024",
-        "duration": "5 Seasons",
-        "genres": ["Drama", "Fantasy", "Horror"],
-        "provider": "Netflix",
-        "provider_logo": "🔴",
-        "provider_url": "https://www.netflix.com",
-        "description": "When a young boy vanishes, a small town uncovers a mystery involving secret experiments, terrifying supernatural forces and one strange little girl.",
-        "stream_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-        "is_streamable": True,
-        "quality": "4K Dolby",
-    },
-    {
-        "id": "bb-3",
-        "title": "RRR — Rise Roar Revolt",
-        "type": "movie",
-        "country": "IN",
-        "backdrop": "https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=1920&q=80",
-        "poster": "https://images.unsplash.com/photo-1594909122845-11baa439b7bf?auto=format&fit=crop&w=600&q=80",
-        "rating": "9.1",
-        "year": "2023",
-        "duration": "3h 07m",
-        "genres": ["Action", "Drama", "Epic"],
-        "provider": "Hotstar",
-        "provider_logo": "🌟",
-        "provider_url": "https://www.hotstar.com",
-        "description": "A fearless revolutionary and an officer in the British force join together against the Raj in 1920s India before embarking on their journey.",
-        "stream_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-        "is_streamable": True,
-        "quality": "IMAX Enhanced",
-    },
-    {
-        "id": "bb-4",
-        "title": "Oppenheimer",
-        "type": "movie",
-        "country": "US",
-        "backdrop": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=80",
-        "poster": "https://images.unsplash.com/photo-1440404653325-ab127d49abc1?auto=format&fit=crop&w=600&q=80",
-        "rating": "8.9",
-        "year": "2023",
-        "duration": "3h 00m",
-        "genres": ["Biography", "Drama", "History"],
-        "provider": "Prime Video",
-        "provider_logo": "📦",
-        "provider_url": "https://www.primevideo.com",
-        "description": "The story of American scientist J. Robert Oppenheimer and his role in the development of the atomic bomb during World War II.",
-        "stream_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-        "is_streamable": True,
-        "quality": "4K Ultra HD",
-    },
-]
-
-CURATED_MOVIES: List[Dict[str, Any]] = [
-    {
-        "id": "m-1",
-        "title": "Dune: Part Two",
-        "country": "US",
-        "poster": "https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=600&q=80",
-        "backdrop": "https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=1920&q=80",
-        "rating": "8.8",
-        "year": "2024",
-        "duration": "2h 46m",
-        "genres": ["Sci-Fi", "Adventure"],
-        "provider": "Hotstar",
-        "stream_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-        "is_streamable": True,
-        "quality": "4K",
-    },
-    {
-        "id": "m-2",
-        "title": "Jawan",
-        "country": "IN",
-        "poster": "https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=600&q=80",
-        "backdrop": "https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=1920&q=80",
-        "rating": "8.2",
-        "year": "2023",
-        "duration": "2h 49m",
-        "genres": ["Action", "Thriller"],
-        "provider": "Netflix",
-        "stream_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-        "is_streamable": True,
-        "quality": "1080p",
-    },
-    {
-        "id": "m-3",
-        "title": "Interstellar",
-        "country": "US",
-        "poster": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=600&q=80",
-        "backdrop": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=80",
-        "rating": "8.7",
-        "year": "2014",
-        "duration": "2h 49m",
-        "genres": ["Sci-Fi", "Drama"],
-        "provider": "Prime Video",
-        "stream_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-        "is_streamable": True,
-        "quality": "4K",
-    },
-    {
-        "id": "m-4",
-        "title": "Brahmāstra: Part One",
-        "country": "IN",
-        "poster": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=600&q=80",
-        "backdrop": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=1920&q=80",
-        "rating": "7.9",
-        "year": "2022",
-        "duration": "2h 47m",
-        "genres": ["Fantasy", "Action"],
-        "provider": "Hotstar",
-        "stream_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-        "is_streamable": True,
-        "quality": "4K",
-    },
-    {
-        "id": "m-5",
-        "title": "The Batman",
-        "country": "US",
-        "poster": "https://images.unsplash.com/photo-1618336753974-aae8e04506aa?auto=format&fit=crop&w=600&q=80",
-        "backdrop": "https://images.unsplash.com/photo-1618336753974-aae8e04506aa?auto=format&fit=crop&w=1920&q=80",
-        "rating": "8.1",
-        "year": "2022",
-        "duration": "2h 56m",
-        "genres": ["Action", "Crime"],
-        "provider": "Hotstar",
-        "stream_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-        "is_streamable": True,
-        "quality": "4K HDR",
-    },
-    {
-        "id": "m-6",
-        "title": "Salaar: Part 1 - Ceasefire",
-        "country": "IN",
-        "poster": "https://images.unsplash.com/photo-1594909122845-11baa439b7bf?auto=format&fit=crop&w=600&q=80",
-        "backdrop": "https://images.unsplash.com/photo-1594909122845-11baa439b7bf?auto=format&fit=crop&w=1920&q=80",
-        "rating": "8.0",
-        "year": "2023",
-        "duration": "2h 55m",
-        "genres": ["Action", "Crime"],
-        "provider": "Netflix",
-        "stream_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-        "is_streamable": True,
-        "quality": "4K",
-    },
-]
-
-CURATED_SHOWS: List[Dict[str, Any]] = [
-    {
-        "id": "s-1",
-        "title": "The Family Man",
-        "country": "IN",
-        "poster": "https://images.unsplash.com/photo-1594909122845-11baa439b7bf?auto=format&fit=crop&w=600&q=80",
-        "backdrop": "https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=1920&q=80",
-        "rating": "8.7",
-        "year": "2021",
-        "seasons": "2 Seasons",
-        "genres": ["Action", "Comedy", "Drama"],
-        "provider": "Prime Video",
-        "stream_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-        "is_streamable": True,
-        "quality": "4K",
-    },
-    {
-        "id": "s-2",
-        "title": "Breaking Bad",
-        "country": "US",
-        "poster": "https://images.unsplash.com/photo-1440404653325-ab127d49abc1?auto=format&fit=crop&w=600&q=80",
-        "backdrop": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=80",
-        "rating": "9.5",
-        "year": "2013",
-        "seasons": "5 Seasons",
-        "genres": ["Crime", "Drama", "Thriller"],
-        "provider": "Netflix",
-        "stream_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-        "is_streamable": True,
-        "quality": "4K Dolby",
-    },
-    {
-        "id": "s-3",
-        "title": "Special OPS",
-        "country": "IN",
-        "poster": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=600&q=80",
-        "backdrop": "https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=1920&q=80",
-        "rating": "8.6",
-        "year": "2020",
-        "seasons": "2 Seasons",
-        "genres": ["Action", "Thriller", "Espionage"],
-        "provider": "Hotstar",
-        "stream_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-        "is_streamable": True,
-        "quality": "1080p",
-    },
-    {
-        "id": "s-4",
-        "title": "Succession",
-        "country": "US",
-        "poster": "https://images.unsplash.com/photo-1618336753974-aae8e04506aa?auto=format&fit=crop&w=600&q=80",
-        "backdrop": "https://images.unsplash.com/photo-1618336753974-aae8e04506aa?auto=format&fit=crop&w=1920&q=80",
-        "rating": "8.9",
-        "year": "2023",
-        "seasons": "4 Seasons",
-        "genres": ["Drama"],
-        "provider": "Hotstar",
-        "stream_url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-        "is_streamable": True,
-        "quality": "4K HDR",
-    },
-]
-
-STREAMING_PROVIDERS: List[Dict[str, Any]] = [
-    {
-        "id": "hotstar",
-        "name": "Disney+ Hotstar",
-        "color": "#001e38",
-        "accent": "#00d1b2",
-        "icon": "🌟",
-        "url": "https://www.hotstar.com",
-        "description": "Live cricket, Disney, Marvel, HBO, and top Indian blockbusters.",
-        "badge": "Cricket & Movies",
-    },
-    {
-        "id": "netflix",
-        "name": "Netflix",
-        "color": "#141414",
-        "accent": "#e50914",
-        "icon": "🔴",
-        "url": "https://www.netflix.com",
-        "description": "Original series, international cinema, anime, and worldwide hits.",
-        "badge": "Top Global Originals",
-    },
-    {
-        "id": "prime",
-        "name": "Amazon Prime Video",
-        "color": "#0f172a",
-        "accent": "#00a8e1",
-        "icon": "📦",
-        "url": "https://www.primevideo.com",
-        "description": "Blockbuster films, Amazon originals, and live sports.",
-        "badge": "Prime Cinema",
-    },
-    {
-        "id": "jiocinema",
-        "name": "JioCinema",
-        "color": "#1e1b4b",
-        "accent": "#e11d48",
-        "icon": "✨",
-        "url": "https://www.jiocinema.com",
-        "description": "Free Indian movies, live sports, HBO, and premium serials.",
-        "badge": "Free Movies & Sports",
-    },
-    {
-        "id": "youtube",
-        "name": "YouTube TV / Free Movies",
-        "color": "#1c1917",
-        "accent": "#ff0000",
-        "icon": "▶️",
-        "url": "https://www.youtube.com/feed/storefront",
-        "description": "Free movies, 24/7 live news feeds, and independent cinema.",
-        "badge": "Free With Ads",
-    },
-]
-
 
 class VodService:
-    @staticmethod
-    def get_featured() -> List[Dict[str, Any]]:
-        return FEATURED_BILLBOARD
+    """Provides curated Live Movie and TV Series channels for Google TV rails and billboard.
+
+    All items originate from authentic IPTV broadcast streams with official broadcaster logos.
+    No fake mock links or external subscription redirects.
+    """
 
     @staticmethod
-    def get_movies(country: str = None) -> List[Dict[str, Any]]:
-        if country and country.upper() != "ALL":
-            return [m for m in CURATED_MOVIES if m.get("country") == country.upper()]
-        return CURATED_MOVIES
+    def _channel_to_vod(chan: Dict[str, Any], item_type: str = "movie") -> Dict[str, Any]:
+        categories = chan.get("categories", [])
+        genre_display = [cat.title() for cat in categories] if categories else ["Live TV"]
+        country_code = chan.get("country", "")
+        country_name = chan.get("country_name", country_code)
+        flag = chan.get("country_flag", "🌐")
+        logo = chan.get("logo") or ""
 
-    @staticmethod
-    def get_shows(country: str = None) -> List[Dict[str, Any]]:
-        if country and country.upper() != "ALL":
-            return [s for s in CURATED_SHOWS if s.get("country") == country.upper()]
-        return CURATED_SHOWS
+        return {
+            "id": chan.get("id"),
+            "title": chan.get("name"),
+            "type": item_type,
+            "country": country_code,
+            "country_name": country_name,
+            "country_flag": flag,
+            "poster": logo,
+            "backdrop": logo,
+            "rating": "Live HD",
+            "year": "24/7",
+            "duration": "Live Channel",
+            "genres": genre_display,
+            "provider": f"{country_name} TV",
+            "provider_logo": flag,
+            "description": f"Live 24/7 broadcast on {chan.get('name')}. Streamed directly in high definition.",
+            "stream_url": chan.get("stream_url"),
+            "is_streamable": True,
+            "quality": chan.get("quality") or "HD",
+        }
 
-    @staticmethod
-    def get_providers() -> List[Dict[str, Any]]:
-        return STREAMING_PROVIDERS
+    def get_featured(self) -> List[Dict[str, Any]]:
+        """Spotlight channels for the Google TV hero carousel with official broadcaster logos."""
+        spotlight = playlist_service.get_spotlight_channels(limit=10)
+        return [self._channel_to_vod(c, item_type="movie") for c in spotlight]
+
+    def get_movies(self, country: Optional[str] = None) -> List[Dict[str, Any]]:
+        """24/7 Live movie channels (Bollywood, Hollywood, regional cinema, classics)."""
+        c_filter = country.upper() if country and country.upper() != "ALL" else None
+        channels, _ = playlist_service.search_channels(category="movies", country=c_filter, limit=80)
+        # Add classic channels if space allows
+        if len(channels) < 40:
+            classic, _ = playlist_service.search_channels(category="classic", country=c_filter, limit=30)
+            seen = {c["id"] for c in channels}
+            for cl in classic:
+                if cl["id"] not in seen:
+                    channels.append(cl)
+                    seen.add(cl["id"])
+
+        return [self._channel_to_vod(c, item_type="movie") for c in channels]
+
+    def get_shows(self, country: Optional[str] = None) -> List[Dict[str, Any]]:
+        """24/7 Live television series, drama serials, and sitcom channels."""
+        c_filter = country.upper() if country and country.upper() != "ALL" else None
+        channels, _ = playlist_service.search_channels(category="series", country=c_filter, limit=60)
+        ent, _ = playlist_service.search_channels(category="entertainment", country=c_filter, limit=60)
+        seen = {c["id"] for c in channels}
+        for e in ent:
+            if e["id"] not in seen:
+                channels.append(e)
+                seen.add(e["id"])
+
+        return [self._channel_to_vod(c, item_type="show") for c in channels]
+
+    def get_providers(self) -> List[Dict[str, Any]]:
+        """Removed external providers to keep pure in-app IPTV streaming."""
+        return []
 
 
 vod_service = VodService()

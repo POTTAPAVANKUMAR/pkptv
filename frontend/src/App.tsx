@@ -2,14 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Header, ActiveTab } from './components/Header';
 import { BillboardHero } from './components/BillboardHero';
 import { HorizontalRail } from './components/HorizontalRail';
-import { VodCard } from './components/VodCard';
-import { ProviderBar } from './components/ProviderBar';
 import { ChannelCard } from './components/ChannelCard';
 import { Player } from './components/Player';
 import { SystemStatsModal } from './components/SystemStatsModal';
 import { CustomPlaylistModal } from './components/CustomPlaylistModal';
 import { api } from './services/api';
-import { Category, Channel, Country, SystemStats, VodItem, StreamingProvider } from './types';
+import { Category, Channel, Country, SystemStats, VodItem } from './types';
 import {
   Tv,
   Sparkles,
@@ -17,7 +15,6 @@ import {
   Film,
   Radio,
   Bookmark,
-  Compass,
 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -33,19 +30,24 @@ export const App: React.FC = () => {
   const [, setCountries] = useState<Country[]>([]);
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null);
 
-  // VOD Datasets
-  const [featuredItems, setFeaturedItems] = useState<VodItem[]>([]);
-  const [movies, setMovies] = useState<VodItem[]>([]);
-  const [shows, setShows] = useState<VodItem[]>([]);
-  const [providers, setProviders] = useState<StreamingProvider[]>([]);
+  // Spotlight Billboard Items
+  const [spotlightItems, setSpotlightItems] = useState<VodItem[]>([]);
 
   // Subsets for Google TV Rails
   const [indiaChannels, setIndiaChannels] = useState<Channel[]>([]);
   const [usChannels, setUsChannels] = useState<Channel[]>([]);
+  const [inMovieChannels, setInMovieChannels] = useState<Channel[]>([]);
+  const [usMovieChannels, setUsMovieChannels] = useState<Channel[]>([]);
+  const [seriesChannels, setSeriesChannels] = useState<Channel[]>([]);
   const [newsChannels, setNewsChannels] = useState<Channel[]>([]);
   const [sportsChannels, setSportsChannels] = useState<Channel[]>([]);
   const [musicChannels, setMusicChannels] = useState<Channel[]>([]);
-  const [movieChannels, setMovieChannels] = useState<Channel[]>([]);
+
+  // Category specific view datasets
+  const [movieTabChannels, setMovieTabChannels] = useState<Channel[]>([]);
+  const [movieTabCountry, setMovieTabCountry] = useState<string>('IN');
+  const [showsTabChannels, setShowsTabChannels] = useState<Channel[]>([]);
+  const [showsTabCountry, setShowsTabCountry] = useState<string>('IN');
 
   const [isStatsOpen, setIsStatsOpen] = useState<boolean>(false);
   const [isCustomM3UOpen, setIsCustomM3UOpen] = useState<boolean>(false);
@@ -66,15 +68,6 @@ export const App: React.FC = () => {
     }
   });
 
-  const [watchlist, setWatchlist] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('pkp_tv_watchlist');
-      return saved ? JSON.parse(saved) : ['m-1', 'bb-1'];
-    } catch {
-      return ['m-1', 'bb-1'];
-    }
-  });
-
   const [recents, setRecents] = useState<Channel[]>(() => {
     try {
       const saved = localStorage.getItem('pkp_tv_recents');
@@ -89,10 +82,6 @@ export const App: React.FC = () => {
   }, [favorites]);
 
   useEffect(() => {
-    localStorage.setItem('pkp_tv_watchlist', JSON.stringify(watchlist));
-  }, [watchlist]);
-
-  useEffect(() => {
     localStorage.setItem('pkp_tv_recents', JSON.stringify(recents));
   }, [recents]);
 
@@ -100,38 +89,46 @@ export const App: React.FC = () => {
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const [cats, counts, stats, feat, mov, shw, prov] = await Promise.all([
+        const [cats, counts, stats, feat] = await Promise.all([
           api.getCategories().catch(() => []),
           api.getCountries().catch(() => []),
           api.getSystemStats().catch(() => null),
           api.getFeatured().catch(() => []),
-          api.getMovies().catch(() => []),
-          api.getShows().catch(() => []),
-          api.getProviders().catch(() => []),
         ]);
         setCategories(cats);
         setCountries(counts);
         setSystemStats(stats);
-        setFeaturedItems(feat);
-        setMovies(mov);
-        setShows(shw);
-        setProviders(prov);
+        setSpotlightItems(feat);
 
-        // Preload Google TV curated rails
-        const [inRes, usRes, newsRes, sportsRes, musicRes, movieRes] = await Promise.all([
-          api.getChannels({ country: 'IN', limit: 20 }),
-          api.getChannels({ country: 'US', limit: 20 }),
-          api.getChannels({ category: 'news', limit: 20 }),
-          api.getChannels({ category: 'sports', limit: 20 }),
-          api.getChannels({ category: 'music', limit: 20 }),
-          api.getChannels({ category: 'movies', limit: 20 }),
+        // Preload Google TV curated rails with authentic broadcaster logos
+        const [
+          inRes,
+          usRes,
+          inMovieRes,
+          usMovieRes,
+          seriesRes,
+          newsRes,
+          sportsRes,
+          musicRes,
+        ] = await Promise.all([
+          api.getChannels({ country: 'IN', limit: 25 }),
+          api.getChannels({ country: 'US', limit: 25 }),
+          api.getChannels({ country: 'IN', category: 'movies', limit: 25 }),
+          api.getChannels({ country: 'US', category: 'movies', limit: 25 }),
+          api.getChannels({ category: 'series', limit: 25 }),
+          api.getChannels({ category: 'news', limit: 25 }),
+          api.getChannels({ category: 'sports', limit: 25 }),
+          api.getChannels({ category: 'music', limit: 25 }),
         ]);
+
         setIndiaChannels(inRes.channels);
         setUsChannels(usRes.channels);
+        setInMovieChannels(inMovieRes.channels);
+        setUsMovieChannels(usMovieRes.channels);
+        setSeriesChannels(seriesRes.channels);
         setNewsChannels(newsRes.channels);
         setSportsChannels(sportsRes.channels);
         setMusicChannels(musicRes.channels);
-        setMovieChannels(movieRes.channels);
       } catch (err) {
         console.error('Initial data fetch error:', err);
       }
@@ -203,17 +200,66 @@ export const App: React.FC = () => {
     loadChannels(true);
   }, [searchQuery, selectedCategory, selectedCountry, customPlaylist]);
 
+  // Load Movies Tab Channels
+  useEffect(() => {
+    const loadMovieTab = async () => {
+      try {
+        const res = await api.getChannels({
+          category: 'movies',
+          country: movieTabCountry !== 'all' ? movieTabCountry : undefined,
+          limit: 80,
+        });
+        setMovieTabChannels(res.channels);
+      } catch (e) {
+        console.error('Failed to load movies tab channels:', e);
+      }
+    };
+    if (activeTab === 'movies') {
+      loadMovieTab();
+    }
+  }, [activeTab, movieTabCountry]);
+
+  // Load Shows Tab Channels
+  useEffect(() => {
+    const loadShowsTab = async () => {
+      try {
+        const res = await api.getChannels({
+          category: 'series',
+          country: showsTabCountry !== 'all' ? showsTabCountry : undefined,
+          limit: 80,
+        });
+        // If series count is small, also append entertainment channels
+        if (res.channels.length < 30) {
+          const entRes = await api.getChannels({
+            category: 'entertainment',
+            country: showsTabCountry !== 'all' ? showsTabCountry : undefined,
+            limit: 50,
+          });
+          const seen = new Set(res.channels.map((c) => c.id));
+          const merged = [...res.channels];
+          for (const ec of entRes.channels) {
+            if (!seen.has(ec.id)) {
+              merged.push(ec);
+              seen.add(ec.id);
+            }
+          }
+          setShowsTabChannels(merged);
+        } else {
+          setShowsTabChannels(res.channels);
+        }
+      } catch (e) {
+        console.error('Failed to load shows tab channels:', e);
+      }
+    };
+    if (activeTab === 'shows') {
+      loadShowsTab();
+    }
+  }, [activeTab, showsTabCountry]);
+
   const toggleFavorite = (channelId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     setFavorites((prev) =>
       prev.includes(channelId) ? prev.filter((id) => id !== channelId) : [...prev, channelId]
-    );
-  };
-
-  const toggleWatchlist = (id: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    setWatchlist((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
   };
 
@@ -231,15 +277,13 @@ export const App: React.FC = () => {
     const channelAdapter: Channel = {
       id: vod.id,
       name: vod.title,
-      logo: vod.poster || vod.backdrop || '',
+      logo: vod.poster || '',
       country: vod.country || 'IN',
-      country_name: vod.country === 'IN' ? 'India' : 'United States',
-      country_flag: vod.country === 'IN' ? '🇮🇳' : '🇺🇸',
-      categories: vod.genres || ['Movies'],
-      stream_url:
-        vod.stream_url ||
-        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-      quality: vod.quality || '4K HDR',
+      country_name: vod.country_name || (vod.country === 'IN' ? 'India' : 'United States'),
+      country_flag: vod.country_flag || (vod.country === 'IN' ? '🇮🇳' : '🇺🇸'),
+      categories: vod.genres || ['Live TV'],
+      stream_url: vod.stream_url || '',
+      quality: vod.quality || '1080p FHD',
     };
     handleSelectChannel(channelAdapter);
   };
@@ -273,14 +317,16 @@ export const App: React.FC = () => {
     setIsRefreshing(true);
     try {
       await api.getChannels({ limit: 1 });
-      const [cats, counts, stats] = await Promise.all([
+      const [cats, counts, stats, feat] = await Promise.all([
         api.getCategories(),
         api.getCountries(),
         api.getSystemStats(),
+        api.getFeatured(),
       ]);
       setCategories(cats);
       setCountries(counts);
       setSystemStats(stats);
+      setSpotlightItems(feat);
       await loadChannels(true);
     } catch (err) {
       console.error('Refresh error:', err);
@@ -298,9 +344,6 @@ export const App: React.FC = () => {
         selectedCountry={selectedCountry}
         onSelectCountry={(c) => {
           setSelectedCountry(c);
-          if (activeTab === 'foryou') {
-            // Stay in For You and adjust view
-          }
         }}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -309,7 +352,7 @@ export const App: React.FC = () => {
         onOpenCustomM3U={() => setIsCustomM3UOpen(true)}
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
-        watchlistCount={watchlist.length}
+        watchlistCount={favorites.length}
       />
 
       {/* Main Container */}
@@ -335,170 +378,361 @@ export const App: React.FC = () => {
           <div>
             {/* Top Billboard Hero Showcase */}
             <BillboardHero
-              items={featuredItems}
+              items={spotlightItems}
               onPlay={handlePlayVod}
-              watchlist={watchlist}
-              onToggleWatchlist={toggleWatchlist}
+              watchlist={favorites}
+              onToggleWatchlist={(id) => toggleFavorite(id)}
             />
 
-            {/* Quick Connected Apps Bar */}
-            <ProviderBar providers={providers} />
-
             {/* Rail 1: Top Channels in India 🇮🇳 */}
-            <HorizontalRail
-              title="Top Channels in India"
-              subtitle="Popular live television from Hotstar, Star, Zee, Sony, and regional networks"
-              icon="🇮🇳"
-              onViewAll={() => {
-                setSelectedCountry('IN');
-                setActiveTab('live');
-              }}
-            >
-              {indiaChannels.map((c) => (
-                <ChannelCard
-                  key={c.id}
-                  channel={c}
-                  isSelected={selectedChannel?.id === c.id}
-                  isFavorite={favorites.includes(c.id)}
-                  onSelect={() => handleSelectChannel(c)}
-                  onToggleFavorite={(e) => toggleFavorite(c.id, e)}
-                  layout="rail"
-                />
-              ))}
-            </HorizontalRail>
+            {indiaChannels.length > 0 && (
+              <HorizontalRail
+                title="Top Live Channels in India"
+                subtitle="Leading Indian national and regional broadcast television"
+                icon="🇮🇳"
+                onViewAll={() => {
+                  setSelectedCountry('IN');
+                  setActiveTab('live');
+                }}
+              >
+                {indiaChannels.map((c) => (
+                  <ChannelCard
+                    key={c.id}
+                    channel={c}
+                    isSelected={selectedChannel?.id === c.id}
+                    isFavorite={favorites.includes(c.id)}
+                    onSelect={() => handleSelectChannel(c)}
+                    onToggleFavorite={(e) => toggleFavorite(c.id, e)}
+                    layout="rail"
+                  />
+                ))}
+              </HorizontalRail>
+            )}
 
-            {/* Rail 2: Trending Movies & Cinema 🎬 */}
-            <HorizontalRail
-              title="Trending Movies & Cinema"
-              subtitle="Stream blockbusters, Bollywood hits, and Hollywood favorites"
-              icon="🎬"
-              onViewAll={() => setActiveTab('movies')}
-            >
-              {movies.map((m) => (
-                <VodCard
-                  key={m.id}
-                  item={m}
-                  onPlay={() => handlePlayVod(m)}
-                  isWatchlisted={watchlist.includes(m.id)}
-                  onToggleWatchlist={(e) => toggleWatchlist(m.id, e)}
-                />
-              ))}
-            </HorizontalRail>
+            {/* Rail 2: 24/7 Live Indian Cinema 🎬 */}
+            {inMovieChannels.length > 0 && (
+              <HorizontalRail
+                title="24/7 Live Indian Cinema"
+                subtitle="Bollywood classics, regional hits, and non-stop film channels"
+                icon="🎬"
+                onViewAll={() => {
+                  setMovieTabCountry('IN');
+                  setActiveTab('movies');
+                }}
+              >
+                {inMovieChannels.map((c) => (
+                  <ChannelCard
+                    key={c.id}
+                    channel={c}
+                    isSelected={selectedChannel?.id === c.id}
+                    isFavorite={favorites.includes(c.id)}
+                    onSelect={() => handleSelectChannel(c)}
+                    onToggleFavorite={(e) => toggleFavorite(c.id, e)}
+                    layout="rail"
+                  />
+                ))}
+              </HorizontalRail>
+            )}
 
-            {/* Rail 3: Popular in United States 🇺🇸 */}
-            <HorizontalRail
-              title="Popular in United States"
-              subtitle="CBS, ABC, NBC, Fox, Bloomberg, and top US cable networks"
-              icon="🇺🇸"
-              onViewAll={() => {
-                setSelectedCountry('US');
-                setActiveTab('live');
-              }}
-            >
-              {usChannels.map((c) => (
-                <ChannelCard
-                  key={c.id}
-                  channel={c}
-                  isSelected={selectedChannel?.id === c.id}
-                  isFavorite={favorites.includes(c.id)}
-                  onSelect={() => handleSelectChannel(c)}
-                  onToggleFavorite={(e) => toggleFavorite(c.id, e)}
-                  layout="rail"
-                />
-              ))}
-            </HorizontalRail>
+            {/* Rail 3: 24/7 Hollywood & US Movies 🍿 */}
+            {usMovieChannels.length > 0 && (
+              <HorizontalRail
+                title="24/7 Hollywood & US Movies"
+                subtitle="Free movie channels, classic cinema, action, and sci-fi"
+                icon="🍿"
+                onViewAll={() => {
+                  setMovieTabCountry('US');
+                  setActiveTab('movies');
+                }}
+              >
+                {usMovieChannels.map((c) => (
+                  <ChannelCard
+                    key={c.id}
+                    channel={c}
+                    isSelected={selectedChannel?.id === c.id}
+                    isFavorite={favorites.includes(c.id)}
+                    onSelect={() => handleSelectChannel(c)}
+                    onToggleFavorite={(e) => toggleFavorite(c.id, e)}
+                    layout="rail"
+                  />
+                ))}
+              </HorizontalRail>
+            )}
 
-            {/* Rail 4: Popular TV Shows & Series 📺 */}
-            <HorizontalRail
-              title="Popular TV Shows & Series"
-              subtitle="Binge-worthy shows from Netflix, Hotstar, and Prime Video"
-              icon="📺"
-              onViewAll={() => setActiveTab('shows')}
-            >
-              {shows.map((s) => (
-                <VodCard
-                  key={s.id}
-                  item={s}
-                  onPlay={() => handlePlayVod(s)}
-                  isWatchlisted={watchlist.includes(s.id)}
-                  onToggleWatchlist={(e) => toggleWatchlist(s.id, e)}
-                />
-              ))}
-            </HorizontalRail>
+            {/* Rail 4: Popular in United States 🇺🇸 */}
+            {usChannels.length > 0 && (
+              <HorizontalRail
+                title="Popular in United States"
+                subtitle="CBS, ABC, NBC, Fox, Bloomberg, and top US television networks"
+                icon="🇺🇸"
+                onViewAll={() => {
+                  setSelectedCountry('US');
+                  setActiveTab('live');
+                }}
+              >
+                {usChannels.map((c) => (
+                  <ChannelCard
+                    key={c.id}
+                    channel={c}
+                    isSelected={selectedChannel?.id === c.id}
+                    isFavorite={favorites.includes(c.id)}
+                    onSelect={() => handleSelectChannel(c)}
+                    onToggleFavorite={(e) => toggleFavorite(c.id, e)}
+                    layout="rail"
+                  />
+                ))}
+              </HorizontalRail>
+            )}
 
-            {/* Rail 5: Live Breaking News & Headlines 🔴 */}
-            <HorizontalRail
-              title="Live News & World Coverage"
-              subtitle="Continuous 24/7 breaking news and weather feeds"
-              icon="🔴"
-              onViewAll={() => {
-                setSelectedCategory('news');
-                setActiveTab('live');
-              }}
-            >
-              {newsChannels.map((c) => (
-                <ChannelCard
-                  key={c.id}
-                  channel={c}
-                  isSelected={selectedChannel?.id === c.id}
-                  isFavorite={favorites.includes(c.id)}
-                  onSelect={() => handleSelectChannel(c)}
-                  onToggleFavorite={(e) => toggleFavorite(c.id, e)}
-                  layout="rail"
-                />
-              ))}
-            </HorizontalRail>
+            {/* Rail 5: Popular TV Shows & Series 📺 */}
+            {seriesChannels.length > 0 && (
+              <HorizontalRail
+                title="24/7 TV Series & Dramas"
+                subtitle="Continuous serials, sitcoms, crime series, and entertainment"
+                icon="📺"
+                onViewAll={() => setActiveTab('shows')}
+              >
+                {seriesChannels.map((c) => (
+                  <ChannelCard
+                    key={c.id}
+                    channel={c}
+                    isSelected={selectedChannel?.id === c.id}
+                    isFavorite={favorites.includes(c.id)}
+                    onSelect={() => handleSelectChannel(c)}
+                    onToggleFavorite={(e) => toggleFavorite(c.id, e)}
+                    layout="rail"
+                  />
+                ))}
+              </HorizontalRail>
+            )}
 
-            {/* Rail 6: Sports Arena 🏆 */}
-            <HorizontalRail
-              title="Live Sports & Events"
-              subtitle="Cricket, Football, Motorsports, and Extreme Sports"
-              icon="🏆"
-              onViewAll={() => {
-                setSelectedCategory('sports');
-                setActiveTab('live');
-              }}
-            >
-              {sportsChannels.map((c) => (
-                <ChannelCard
-                  key={c.id}
-                  channel={c}
-                  isSelected={selectedChannel?.id === c.id}
-                  isFavorite={favorites.includes(c.id)}
-                  onSelect={() => handleSelectChannel(c)}
-                  onToggleFavorite={(e) => toggleFavorite(c.id, e)}
-                  layout="rail"
-                />
-              ))}
-            </HorizontalRail>
+            {/* Rail 6: Live Breaking News & Headlines 🔴 */}
+            {newsChannels.length > 0 && (
+              <HorizontalRail
+                title="Live News & Global Headlines"
+                subtitle="Continuous 24/7 breaking news and weather feeds"
+                icon="🔴"
+                onViewAll={() => {
+                  setSelectedCategory('news');
+                  setActiveTab('live');
+                }}
+              >
+                {newsChannels.map((c) => (
+                  <ChannelCard
+                    key={c.id}
+                    channel={c}
+                    isSelected={selectedChannel?.id === c.id}
+                    isFavorite={favorites.includes(c.id)}
+                    onSelect={() => handleSelectChannel(c)}
+                    onToggleFavorite={(e) => toggleFavorite(c.id, e)}
+                    layout="rail"
+                  />
+                ))}
+              </HorizontalRail>
+            )}
 
-            {/* Rail 7: Music & 24/7 Concerts 🎵 */}
-            <HorizontalRail
-              title="Music & Non-Stop Visuals"
-              subtitle="Top hits, indie tracks, and live music channels"
-              icon="🎵"
-              onViewAll={() => {
-                setSelectedCategory('music');
-                setActiveTab('live');
-              }}
-            >
-              {musicChannels.map((c) => (
-                <ChannelCard
-                  key={c.id}
-                  channel={c}
-                  isSelected={selectedChannel?.id === c.id}
-                  isFavorite={favorites.includes(c.id)}
-                  onSelect={() => handleSelectChannel(c)}
-                  onToggleFavorite={(e) => toggleFavorite(c.id, e)}
-                  layout="rail"
-                />
-              ))}
-            </HorizontalRail>
+            {/* Rail 7: Sports Arena 🏆 */}
+            {sportsChannels.length > 0 && (
+              <HorizontalRail
+                title="Live Sports & Motors"
+                subtitle="Cricket, football, racing, combat, and outdoor sports"
+                icon="🏆"
+                onViewAll={() => {
+                  setSelectedCategory('sports');
+                  setActiveTab('live');
+                }}
+              >
+                {sportsChannels.map((c) => (
+                  <ChannelCard
+                    key={c.id}
+                    channel={c}
+                    isSelected={selectedChannel?.id === c.id}
+                    isFavorite={favorites.includes(c.id)}
+                    onSelect={() => handleSelectChannel(c)}
+                    onToggleFavorite={(e) => toggleFavorite(c.id, e)}
+                    layout="rail"
+                  />
+                ))}
+              </HorizontalRail>
+            )}
+
+            {/* Rail 8: Music & 24/7 Visuals 🎵 */}
+            {musicChannels.length > 0 && (
+              <HorizontalRail
+                title="Live Music Television"
+                subtitle="Continuous hits, retro tracks, and concerts"
+                icon="🎵"
+                onViewAll={() => {
+                  setSelectedCategory('music');
+                  setActiveTab('live');
+                }}
+              >
+                {musicChannels.map((c) => (
+                  <ChannelCard
+                    key={c.id}
+                    channel={c}
+                    isSelected={selectedChannel?.id === c.id}
+                    isFavorite={favorites.includes(c.id)}
+                    onSelect={() => handleSelectChannel(c)}
+                    onToggleFavorite={(e) => toggleFavorite(c.id, e)}
+                    layout="rail"
+                  />
+                ))}
+              </HorizontalRail>
+            )}
           </div>
         )}
 
         {/* =========================================================================
-            TAB 2: LIVE TV (Full Channels Directory with Filters)
+            TAB 2: MOVIES (24/7 Live Movie Channels)
+            ========================================================================= */}
+        {activeTab === 'movies' && (
+          <div>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-2xl font-black text-white flex items-center gap-2">
+                  <Film className="w-6 h-6 text-indigo-400" />
+                  Live Movies & Cinema Channels
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  24/7 non-stop movie broadcasts from India, United States, and international networks.
+                </p>
+              </div>
+
+              {/* Country selector chips */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setMovieTabCountry('IN')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                    movieTabCountry === 'IN'
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md'
+                      : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                  }`}
+                >
+                  🇮🇳 India Cinema ★
+                </button>
+                <button
+                  onClick={() => setMovieTabCountry('US')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                    movieTabCountry === 'US'
+                      ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50 shadow-md'
+                      : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                  }`}
+                >
+                  🇺🇸 US Movies ★
+                </button>
+                <button
+                  onClick={() => setMovieTabCountry('all')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                    movieTabCountry === 'all'
+                      ? 'bg-white text-slate-950 font-bold'
+                      : 'bg-white/5 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  🌐 Worldwide
+                </button>
+              </div>
+            </div>
+
+            {/* Movie Channels Grid */}
+            {movieTabChannels.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                {movieTabChannels.map((c) => (
+                  <ChannelCard
+                    key={c.id}
+                    channel={c}
+                    isSelected={selectedChannel?.id === c.id}
+                    isFavorite={favorites.includes(c.id)}
+                    onSelect={() => handleSelectChannel(c)}
+                    onToggleFavorite={(e) => toggleFavorite(c.id, e)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-20">
+                <Film className="w-16 h-16 text-slate-600 mx-auto mb-3" />
+                <h3 className="text-lg font-bold text-white">Loading movie channels...</h3>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* =========================================================================
+            TAB 3: SHOWS (24/7 TV Series & Serials)
+            ========================================================================= */}
+        {activeTab === 'shows' && (
+          <div>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-2xl font-black text-white flex items-center gap-2">
+                  <Tv className="w-6 h-6 text-indigo-400" />
+                  Live TV Series & Entertainment Channels
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  Continuous 24/7 drama serials, sitcoms, crime series, and entertainment television.
+                </p>
+              </div>
+
+              {/* Country selector chips */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowsTabCountry('IN')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                    showsTabCountry === 'IN'
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md'
+                      : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                  }`}
+                >
+                  🇮🇳 India Serials ★
+                </button>
+                <button
+                  onClick={() => setShowsTabCountry('US')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                    showsTabCountry === 'US'
+                      ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50 shadow-md'
+                      : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                  }`}
+                >
+                  🇺🇸 US TV Shows ★
+                </button>
+                <button
+                  onClick={() => setShowsTabCountry('all')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                    showsTabCountry === 'all'
+                      ? 'bg-white text-slate-950 font-bold'
+                      : 'bg-white/5 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  🌐 Worldwide
+                </button>
+              </div>
+            </div>
+
+            {/* Shows Channels Grid */}
+            {showsTabChannels.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                {showsTabChannels.map((c) => (
+                  <ChannelCard
+                    key={c.id}
+                    channel={c}
+                    isSelected={selectedChannel?.id === c.id}
+                    isFavorite={favorites.includes(c.id)}
+                    onSelect={() => handleSelectChannel(c)}
+                    onToggleFavorite={(e) => toggleFavorite(c.id, e)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-20">
+                <Tv className="w-16 h-16 text-slate-600 mx-auto mb-3" />
+                <h3 className="text-lg font-bold text-white">Loading TV series channels...</h3>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* =========================================================================
+            TAB 4: ALL LIVE CHANNELS (Directory with Filters)
             ========================================================================= */}
         {activeTab === 'live' && (
           <div>
@@ -595,114 +829,17 @@ export const App: React.FC = () => {
         )}
 
         {/* =========================================================================
-            TAB 3: MOVIES
-            ========================================================================= */}
-        {activeTab === 'movies' && (
-          <div>
-            <div className="mb-6">
-              <h2 className="text-2xl font-black text-white flex items-center gap-2">
-                <Film className="w-6 h-6 text-indigo-400" />
-                Movies & Cinema Collection
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Stream on-demand blockbusters, Bollywood releases, Hollywood epics, and 24/7 movie channels.
-              </p>
-            </div>
-
-            {/* Movies Grid */}
-            <div className="mb-10">
-              <h3 className="text-base font-bold text-white mb-3">Featured On-Demand Releases</h3>
-              <div className="flex flex-wrap gap-4">
-                {movies.map((m) => (
-                  <VodCard
-                    key={m.id}
-                    item={m}
-                    onPlay={() => handlePlayVod(m)}
-                    isWatchlisted={watchlist.includes(m.id)}
-                    onToggleWatchlist={(e) => toggleWatchlist(m.id, e)}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* 24/7 Movie Television Channels */}
-            <div>
-              <h3 className="text-base font-bold text-white mb-3">Live 24/7 Movie Channels</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {movieChannels.map((c) => (
-                  <ChannelCard
-                    key={c.id}
-                    channel={c}
-                    isSelected={selectedChannel?.id === c.id}
-                    isFavorite={favorites.includes(c.id)}
-                    onSelect={() => handleSelectChannel(c)}
-                    onToggleFavorite={(e) => toggleFavorite(c.id, e)}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* =========================================================================
-            TAB 4: SHOWS & SERIES
-            ========================================================================= */}
-        {activeTab === 'shows' && (
-          <div>
-            <div className="mb-6">
-              <h2 className="text-2xl font-black text-white flex items-center gap-2">
-                <Tv className="w-6 h-6 text-indigo-400" />
-                TV Shows & Binge Series
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Popular episodic dramas, crime series, and regional TV serials.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-4 mb-10">
-              {shows.map((s) => (
-                <VodCard
-                  key={s.id}
-                  item={s}
-                  onPlay={() => handlePlayVod(s)}
-                  isWatchlisted={watchlist.includes(s.id)}
-                  onToggleWatchlist={(e) => toggleWatchlist(s.id, e)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* =========================================================================
-            TAB 5: APPS & STREAMING HUB
-            ========================================================================= */}
-        {activeTab === 'apps' && (
-          <div>
-            <div className="mb-6">
-              <h2 className="text-2xl font-black text-white flex items-center gap-2">
-                <Compass className="w-6 h-6 text-indigo-400" />
-                Streaming Apps & Content Providers
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Access your subscriptions, live cricket on Hotstar, Netflix originals, Prime Video, and JioCinema.
-              </p>
-            </div>
-            <ProviderBar providers={providers} />
-          </div>
-        )}
-
-        {/* =========================================================================
-            TAB 6: MY LIBRARY & WATCHLIST
+            TAB 5: FAVORITES & RECENTLY WATCHED
             ========================================================================= */}
         {activeTab === 'watchlist' && (
           <div>
             <div className="mb-6">
               <h2 className="text-2xl font-black text-white flex items-center gap-2">
                 <Bookmark className="w-6 h-6 text-amber-400" />
-                My Library & Watchlist
+                Favorites & Recently Watched
               </h2>
               <p className="text-xs text-slate-400 mt-1">
-                Your saved movies, series, starred TV channels, and recently watched history.
+                Your starred live channels and viewing history.
               </p>
             </div>
 
@@ -731,27 +868,6 @@ export const App: React.FC = () => {
                   No channels starred yet. Click the star on any channel to pin it here.
                 </p>
               )}
-            </div>
-
-            {/* Saved Movies & Shows */}
-            <div className="mb-10">
-              <h3 className="text-base font-bold text-white mb-3">
-                Saved Movies & Shows ({watchlist.length})
-              </h3>
-              <div className="flex flex-wrap gap-4">
-                {[...movies, ...shows, ...featuredItems]
-                  .filter((item, index, self) => self.findIndex((i) => i.id === item.id) === index)
-                  .filter((item) => watchlist.includes(item.id))
-                  .map((item) => (
-                    <VodCard
-                      key={item.id}
-                      item={item}
-                      onPlay={() => handlePlayVod(item)}
-                      isWatchlisted={true}
-                      onToggleWatchlist={(e) => toggleWatchlist(item.id, e)}
-                    />
-                  ))}
-              </div>
             </div>
 
             {/* Recently Played */}

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Play, Star, Bookmark } from 'lucide-react';
+import React, { useState } from 'react';
+import { Play, Star, Tv } from 'lucide-react';
 import { VodItem } from '../types';
 
 interface VodCardProps {
@@ -15,64 +15,81 @@ export const VodCard: React.FC<VodCardProps> = ({
   isWatchlisted,
   onToggleWatchlist,
 }) => {
+  const [imgError, setImgError] = useState(false);
+
   return (
     <div
       onClick={onPlay}
-      className="group relative flex flex-col shrink-0 w-44 md:w-52 rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-2 select-none"
+      className="group relative flex flex-col shrink-0 w-48 md:w-56 rounded-2xl p-3 bg-slate-900/80 border border-white/10 hover:border-indigo-500/50 hover:shadow-[0_0_24px_rgba(99,102,241,0.3)] transition-all duration-300 cursor-pointer select-none"
     >
-      {/* 2:3 Aspect Ratio Poster */}
-      <div className="relative aspect-[2/3] w-full rounded-2xl overflow-hidden bg-slate-900 border border-white/10 group-hover:border-indigo-500/50 group-hover:shadow-[0_12px_32px_rgba(99,102,241,0.25)] transition-all">
-        <img
-          src={item.poster}
-          alt={item.title}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-          loading="lazy"
-        />
+      {/* 16:9 Aspect Ratio Display */}
+      <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-slate-950 flex items-center justify-center p-3 border border-white/5 mb-2.5">
+        {item.poster && !imgError ? (
+          <img
+            src={item.poster}
+            alt={item.title}
+            onError={() => setImgError(true)}
+            className="w-full h-full object-contain filter group-hover:scale-110 transition-transform duration-300"
+            loading="lazy"
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center text-slate-500">
+            <Tv className="w-8 h-8 mb-1 text-indigo-400 opacity-60" />
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              {item.title.slice(0, 4)}
+            </span>
+          </div>
+        )}
 
-        {/* Top Badges: Provider & Rating */}
-        <div className="absolute top-2 inset-x-2 flex items-center justify-between z-10">
-          {item.provider && (
-            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-black/60 backdrop-blur-md text-white border border-white/15">
-              {item.provider}
-            </span>
-          )}
-          {item.rating && (
-            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-black/70 backdrop-blur-md text-amber-300 flex items-center gap-0.5 border border-white/10">
-              <Star className="w-2.5 h-2.5 fill-amber-400" />
-              {item.rating}
-            </span>
-          )}
+        {/* Live Indicator Pill on top-left */}
+        <div className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/75 backdrop-blur-md text-[9px] font-black text-white border border-white/10">
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-live-dot" />
+          <span>LIVE</span>
         </div>
 
-        {/* Watchlist Bookmark Icon */}
-        <button
-          onClick={onToggleWatchlist}
-          title={isWatchlisted ? 'Remove from Watchlist' : 'Add to Watchlist'}
-          className={`absolute bottom-2 right-2 p-1.5 rounded-xl backdrop-blur-md transition-all z-10 ${
-            isWatchlisted
-              ? 'bg-amber-500 text-slate-950 font-bold'
-              : 'bg-black/50 text-white hover:bg-black/80'
-          }`}
-        >
-          <Bookmark className={`w-3.5 h-3.5 ${isWatchlisted ? 'fill-current' : ''}`} />
-        </button>
+        {/* Quality Pill on top-right */}
+        {item.quality && (
+          <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-black/75 backdrop-blur-md text-amber-300 border border-white/10">
+            {item.quality}
+          </div>
+        )}
 
-        {/* Hover Play Button */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <div className="w-12 h-12 rounded-full bg-white text-slate-950 flex items-center justify-center shadow-xl transform scale-75 group-hover:scale-100 transition-transform duration-300">
-            <Play className="w-5 h-5 fill-current ml-0.5" />
+        {/* Hover Play Button Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <div className="w-10 h-10 rounded-full bg-white text-slate-950 flex items-center justify-center shadow-2xl transform scale-75 group-hover:scale-100 transition-transform duration-200">
+            <Play className="w-4 h-4 fill-current ml-0.5" />
           </div>
         </div>
       </div>
 
-      {/* Title & Metadata */}
-      <div className="pt-2 px-1">
-        <h3 className="text-sm font-bold text-white truncate group-hover:text-indigo-400 transition-colors">
-          {item.title}
-        </h3>
-        <p className="text-xs text-slate-400 truncate mt-0.5">
-          {item.year} • {item.genres.slice(0, 2).join(', ')}
-        </p>
+      {/* Details Row */}
+      <div className="flex items-start justify-between gap-2 px-1">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className="text-xs" title={item.country || 'Live'}>
+              {item.country === 'IN' ? '🇮🇳' : item.country === 'US' ? '🇺🇸' : '🌐'}
+            </span>
+            <h3 className="text-xs md:text-sm font-bold text-white truncate group-hover:text-indigo-400 transition-colors">
+              {item.title}
+            </h3>
+          </div>
+          <p className="text-[11px] text-slate-400 truncate">
+            {item.genres && item.genres.length > 0 ? item.genres.join(', ') : 'Live Channel'}
+          </p>
+        </div>
+
+        {/* Favorite Bookmark */}
+        <button
+          onClick={onToggleWatchlist}
+          title={isWatchlisted ? 'Remove from favorites' : 'Add to favorites'}
+          className={`p-1.5 rounded-xl transition-all shrink-0 ${
+            isWatchlisted
+              ? 'text-amber-400 bg-amber-400/15 hover:bg-amber-400/25'
+              : 'text-slate-400 hover:text-white hover:bg-white/10'
+          }`}
+        >
+          <Star className={`w-3.5 h-3.5 ${isWatchlisted ? 'fill-current text-amber-400' : ''}`} />
+        </button>
       </div>
     </div>
   );
