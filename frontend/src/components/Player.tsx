@@ -128,6 +128,13 @@ export const Player: React.FC<PlayerProps> = ({
       ? api.getProxiedStreamUrl(channel.stream_url)
       : channel.stream_url;
 
+  const isDirectVideo =
+    channel.stream_url.toLowerCase().includes('.mp4') ||
+    channel.stream_url.toLowerCase().includes('.mkv') ||
+    channel.stream_url.toLowerCase().includes('.webm') ||
+    channel.stream_url.includes('/movie/') ||
+    channel.stream_url.includes('/vod/stream/');
+
   const handleToggleDvr = async () => {
     if (dvrRecording?.is_active) {
       setIsWatchingDvr((prev) => !prev);
@@ -957,18 +964,20 @@ export const Player: React.FC<PlayerProps> = ({
               </select>
             )}
 
-            <button
-              onClick={handleSaveToPi}
-              disabled={isDownloading}
-              title="Save Movie to Pi Storage (Permanent Archive)"
-              className={`p-2 rounded-xl transition-all ${
-                isDownloading
-                  ? 'bg-amber-500/20 text-amber-400 animate-pulse'
-                  : 'bg-white/10 text-slate-300 hover:bg-white/20 hover:text-white'
-              }`}
-            >
-              <Download className="w-4 h-4" />
-            </button>
+            {!isLiveStream && isDirectVideo && (
+              <button
+                onClick={handleSaveToPi}
+                disabled={isDownloading}
+                title="Save Movie to Pi Storage (Permanent Archive)"
+                className={`p-2 rounded-xl transition-all ${
+                  isDownloading
+                    ? 'bg-amber-500/20 text-amber-400 animate-pulse'
+                    : 'bg-white/10 text-slate-300 hover:bg-white/20 hover:text-white'
+                }`}
+              >
+                <Download className="w-4 h-4" />
+              </button>
+            )}
 
             <button
               onClick={togglePiP}
