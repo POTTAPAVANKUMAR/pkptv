@@ -125,7 +125,7 @@ class XtreamService:
         """Validates upstream credentials and returns account information."""
         base = self._clean_server_url(server)
         api_url = f"{base}/player_api.php"
-        headers = {"User-Agent": settings.USER_AGENT}
+        headers = {"User-Agent": "IPTVSmartersPro"}
 
         async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
             try:
@@ -165,7 +165,7 @@ class XtreamService:
                 resp = await client.get(
                     api_url,
                     params={"username": user, "password": password, "action": "get_vod_categories"},
-                    headers={"User-Agent": settings.USER_AGENT},
+                    headers={"User-Agent": "IPTVSmartersPro"},
                 )
                 return resp.json() if resp.status_code == 200 else []
             except Exception as e:
@@ -183,7 +183,7 @@ class XtreamService:
 
         async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
             try:
-                resp = await client.get(api_url, params=params, headers={"User-Agent": settings.USER_AGENT})
+                resp = await client.get(api_url, params=params, headers={"User-Agent": "IPTVSmartersPro"})
                 if resp.status_code != 200:
                     return []
                 movies = resp.json()
@@ -233,7 +233,7 @@ class XtreamService:
                 resp = await client.get(
                     api_url,
                     params={"username": user, "password": password, "action": "get_live_streams"},
-                    headers={"User-Agent": settings.USER_AGENT},
+                    headers={"User-Agent": "IPTVSmartersPro"},
                 )
                 if resp.status_code != 200:
                     return []
@@ -310,7 +310,7 @@ class XtreamService:
 
         try:
             async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
-                async with client.stream("GET", stream_url, headers={"User-Agent": settings.USER_AGENT}) as resp:
+                async with client.stream("GET", stream_url, headers={"User-Agent": "IPTVSmartersPro"}) as resp:
                     if resp.status_code >= 400:
                         info["status"] = "error"
                         info["error"] = f"Upstream HTTP {resp.status_code}"

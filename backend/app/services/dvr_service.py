@@ -54,6 +54,7 @@ class DvrService:
             "ffmpeg",
             "-hide_banner",
             "-loglevel", "warning",
+            "-user_agent", "IPTVSmartersPro",
             "-reconnect", "1",
             "-reconnect_at_eof", "1",
             "-reconnect_streamed", "1",

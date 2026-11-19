@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Hls from 'hls.js';
+import mpegts from 'mpegts.js';
 import {
   Play,
   Pause,
@@ -57,6 +58,7 @@ export const Player: React.FC<PlayerProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const mpegPlayerRef = useRef<mpegts.Player | null>(null);
 
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [volume, setVolume] = useState<number>(() => {
@@ -67,7 +69,19 @@ export const Player: React.FC<PlayerProps> = ({
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [useProxy, setUseProxy] = useState<boolean>(false);
+
+  // Auto-enable proxy if on HTTPS and stream is HTTP (bypassing mixed content blocks)
+  // or if stream is from IPTV providers (:8080, :8000, etc.) requiring IPTV User-Agent
+  const shouldDefaultToProxy =
+    (typeof window !== 'undefined' &&
+      window.location.protocol === 'https:' &&
+      channel.stream_url.startsWith('http://')) ||
+    channel.stream_url.includes(':8080') ||
+    channel.stream_url.includes(':8000') ||
+    channel.stream_url.includes(':25461') ||
+    channel.stream_url.includes('/live/') ||
+    channel.stream_url.includes('/movie/');
+  const [useProxy, setUseProxy] = useState<boolean>(shouldDefaultToProxy);
   const [qualities, setQualities] = useState<{ id: number; height: number; bitrate: number }[]>([]);
   const [selectedQuality, setSelectedQuality] = useState<number>(-1); // -1 = Auto
   const [copied, setCopied] = useState<boolean>(false);
@@ -165,10 +179,14 @@ export const Player: React.FC<PlayerProps> = ({
     setCurrentTime(0);
     setDuration(0);
 
-    // Destroy existing Hls instance if any
+    // Destroy existing player instances if any
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
+    }
+    if (mpegPlayerRef.current) {
+      mpegPlayerRef.current.destroy();
+      mpegPlayerRef.current = null;
     }
 
     const isDirectVideo =
@@ -205,6 +223,55 @@ export const Player: React.FC<PlayerProps> = ({
       return;
     }
 
+    // Direct MPEG-TS Stream Playback via mpegts.js (MSE demuxing in browser)
+    const isMpegTs =
+      !isWatchingDvr &&
+      (streamUrl.toLowerCase().includes('.ts') ||
+        channel.stream_url.toLowerCase().endsWith('.ts'));
+
+    if (isMpegTs && mpegts.isSupported()) {
+      setIsLiveStream(true);
+      try {
+        const player = mpegts.createPlayer(
+          {
+            type: 'mse',
+            isLive: true,
+            url: streamUrl,
+          },
+          {
+            enableWorker: true,
+            lazyLoadMaxDuration: 3 * 60,
+            seekType: 'range',
+            liveBufferLatencyChasing: true,
+          }
+        );
+
+        mpegPlayerRef.current = player;
+        player.attachMediaElement(video);
+        player.load();
+
+        player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string) => {
+          console.warn('mpegts error:', errorType, errorDetail);
+          if (!useProxy && !streamUrl.startsWith('/api/v1/proxy')) {
+            setUseProxy(true);
+          } else {
+            setError('Failed to play live MPEG-TS stream. Channel may be offline.');
+            setIsLoading(false);
+          }
+        });
+
+        const onPlaying = () => {
+          setIsLoading(false);
+          setIsPlaying(true);
+        };
+        video.addEventListener('playing', onPlaying);
+        video.play().catch(() => setIsPlaying(false));
+        return;
+      } catch (err) {
+        console.warn('mpegts player creation error, falling back to HLS:', err);
+      }
+    }
+
     if (Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
@@ -216,7 +283,8 @@ export const Player: React.FC<PlayerProps> = ({
 
       // In web browsers, live MPEG-TS URLs (.ts) are accessed via HLS (.m3u8) for native MSE decoding
       let sourceUrl = streamUrl;
-      if (sourceUrl.includes('/live/') && sourceUrl.endsWith('.ts')) {
+      const decodedSource = decodeURIComponent(sourceUrl);
+      if (decodedSource.includes('/live/') && decodedSource.endsWith('.ts')) {
         sourceUrl = sourceUrl.replace(/\.ts$/, '.m3u8');
       }
 
@@ -288,6 +356,10 @@ export const Player: React.FC<PlayerProps> = ({
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
+      }
+      if (mpegPlayerRef.current) {
+        mpegPlayerRef.current.destroy();
+        mpegPlayerRef.current = null;
       }
     };
   }, [setupStream]);

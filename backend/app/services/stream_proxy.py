@@ -44,23 +44,51 @@ class StreamProxyService:
 
         return "\n".join(rewritten_lines)
 
-    async def proxy_request(self, target_url: str, request_headers: dict) -> Response:
-        """Proxies an HLS manifest or media chunk with proper CORS headers."""
+    async def proxy_request(self, target_url: str, request_headers: dict, method: str = "GET") -> Response:
+        """Proxies an HLS manifest, MPEG-TS live stream, or media chunk with proper CORS headers."""
         target_url = unquote(target_url)
 
+        # Standard IPTV player User-Agent to ensure compatibility with Xtream Codes, Stalker, and IPTV middleware
+        # Many IPTV providers reject browser User-Agents (Mozilla/5.0) with HTTP 401 Unauthorized
         headers = {
-            "User-Agent": settings.USER_AGENT,
+            "User-Agent": "IPTVSmartersPro",
             "Accept": "*/*",
         }
         # Forward range headers if seeking
         if "range" in request_headers:
             headers["range"] = request_headers["range"]
 
-        client = httpx.AsyncClient(timeout=15.0, follow_redirects=True)
+        client = httpx.AsyncClient(
+            timeout=httpx.Timeout(timeout=None, connect=10.0, read=None),
+            follow_redirects=True,
+        )
 
         try:
+            if method.upper() == "HEAD":
+                req = client.build_request("HEAD", target_url, headers=headers)
+                response = await client.send(req)
+                await client.aclose()
+                return Response(
+                    status_code=response.status_code,
+                    headers={
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                        "Access-Control-Allow-Headers": "*",
+                        "Accept-Ranges": "bytes",
+                        "Content-Type": response.headers.get("content-type", "video/mp2t"),
+                        "Content-Length": response.headers.get("content-length", "0"),
+                    },
+                )
+
             req = client.build_request("GET", target_url, headers=headers)
             response = await client.send(req, stream=True)
+
+            # If upstream blocked with 401/403, retry once with VLC player User-Agent
+            if response.status_code in (401, 403):
+                await response.aclose()
+                headers["User-Agent"] = "VLC/3.0.18 LibVLC/3.0.18"
+                req = client.build_request("GET", target_url, headers=headers)
+                response = await client.send(req, stream=True)
 
             content_type = response.headers.get("content-type", "")
             status_code = response.status_code
@@ -101,7 +129,7 @@ class StreamProxyService:
                     logger.error(f"Error rewriting manifest for {target_url}: {e}")
                     return Response(content=content_bytes, status_code=status_code, media_type=content_type)
 
-            # For video/transport stream chunks (.ts, .m4s, etc.), stream response asynchronously
+            # For video/transport stream chunks (.ts, .m4s, .mp4, .mkv, etc.), stream response asynchronously
             async def chunk_generator() -> AsyncGenerator[bytes, None]:
                 try:
                     async for chunk in response.aiter_bytes(chunk_size=65536):
@@ -114,7 +142,8 @@ class StreamProxyService:
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
                 "Access-Control-Allow-Headers": "*",
-                "Cache-Control": "public, max-age=3600",
+                "Accept-Ranges": "bytes",
+                "Cache-Control": "public, max-age=3600" if status_code == 200 else "no-cache",
             }
             if "content-length" in response.headers:
                 resp_headers["content-length"] = response.headers["content-length"]
