@@ -15,6 +15,8 @@ from app.api.v1.system import router as system_router
 from app.api.v1.playlists import router as playlists_router
 from app.api.v1.vod import router as vod_router
 from app.api.v1.dvr import router as dvr_router
+from app.api.v1.xtream import router as xtream_router
+from app.api.v1.xtream_server import router as xtream_server_router
 from app.services.dvr_service import dvr_service
 
 # Initialize structured logging
@@ -69,6 +71,8 @@ app.include_router(system_router, prefix="/api/v1")
 app.include_router(playlists_router, prefix="/api/v1")
 app.include_router(vod_router, prefix="/api/v1")
 app.include_router(dvr_router, prefix="/api/v1")
+app.include_router(xtream_router, prefix="/api/v1")
+app.include_router(xtream_server_router)
 
 
 @app.get("/health", tags=["system"])

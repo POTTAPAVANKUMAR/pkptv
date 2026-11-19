@@ -292,8 +292,34 @@ class PlaylistService:
     @staticmethod
     def parse_m3u_text(content: str) -> List[Dict[str, Any]]:
         """Parses raw M3U / M3U8 string content into structured channel objects."""
-        channels = []
+        country_flags = {
+            "US": ("United States", "🇺🇸"),
+            "IN": ("India", "🇮🇳"),
+            "UK": ("United Kingdom", "🇬🇧"),
+            "GB": ("United Kingdom", "🇬🇧"),
+            "CA": ("Canada", "🇨🇦"),
+            "AU": ("Australia", "🇦🇺"),
+            "VN": ("Vietnam", "🇻🇳"),
+            "FR": ("France", "🇫🇷"),
+            "DE": ("Germany", "🇩🇪"),
+            "IT": ("Italy", "🇮🇹"),
+            "ES": ("Spain", "🇪🇸"),
+            "BR": ("Brazil", "🇧🇷"),
+            "MX": ("Mexico", "🇲🇽"),
+            "JP": ("Japan", "🇯🇵"),
+            "KR": ("South Korea", "🇰🇷"),
+            "RU": ("Russia", "🇷🇺"),
+            "NL": ("Netherlands", "🇳🇱"),
+            "AE": ("United Arab Emirates", "🇦🇪"),
+            "PK": ("Pakistan", "🇵🇰"),
+            "BD": ("Bangladesh", "🇧🇩"),
+            "ZA": ("South Africa", "🇿🇦"),
+            "TR": ("Turkey", "🇹🇷"),
+        }
+
+        channels: List[Dict[str, Any]] = []
         current_meta: Dict[str, Any] = {}
+        seen_ids = set()
 
         for line in content.splitlines():
             line = line.strip()
@@ -305,24 +331,63 @@ class PlaylistService:
                 tvg_id = re.search(r'tvg-id="([^"]*)"', line)
                 tvg_name = re.search(r'tvg-name="([^"]*)"', line)
                 tvg_logo = re.search(r'tvg-logo="([^"]*)"', line)
+                tvg_country = re.search(r'tvg-country="([^"]*)"', line)
                 group_title = re.search(r'group-title="([^"]*)"', line)
 
                 # Channel title is everything after last comma
                 comma_idx = line.rfind(",")
-                title = line[comma_idx + 1 :].strip() if comma_idx != -1 else "Unknown Channel"
+                raw_title = line[comma_idx + 1 :].strip() if comma_idx != -1 else "Unknown Channel"
+                display_name = raw_title or (tvg_name.group(1) if tvg_name else "Channel")
+
+                raw_id_str = tvg_id.group(1) if tvg_id and tvg_id.group(1) else f"ch-{len(channels)+1}"
+                chan_id = raw_id_str
+                if chan_id in seen_ids:
+                    chan_id = f"{raw_id_str}_{len(channels)+1}"
+                seen_ids.add(chan_id)
+
+                # Infer country from tvg-country or tvg-id (e.g. 'CNN.us@SD' -> 'US')
+                c_code = "CUSTOM"
+                if tvg_country and tvg_country.group(1):
+                    c_code = tvg_country.group(1).upper()
+                else:
+                    c_match = re.search(r"\.([a-z]{2})(?:@|$)", raw_id_str, re.IGNORECASE)
+                    if c_match:
+                        c_code = c_match.group(1).upper()
+
+                c_name, c_flag = country_flags.get(c_code, (c_code if c_code != "CUSTOM" else "Live TV", "📺" if c_code == "CUSTOM" else "🌐"))
+
+                # Parse categories / genres
+                cats = ["Live TV"]
+                if group_title and group_title.group(1):
+                    raw_cats = [c.strip() for c in re.split(r"[;,/]", group_title.group(1)) if c.strip()]
+                    if raw_cats:
+                        cats = raw_cats
+
+                # Infer quality
+                quality = "HD"
+                if "1080" in display_name:
+                    quality = "1080p FHD"
+                elif "720" in display_name:
+                    quality = "720p HD"
+                elif "4k" in display_name.lower():
+                    quality = "4K UHD"
+                elif "sd" in display_name.lower():
+                    quality = "SD"
 
                 current_meta = {
-                    "id": tvg_id.group(1) if tvg_id else f"custom-{len(channels)+1}",
-                    "name": tvg_name.group(1) if tvg_name else title,
+                    "id": chan_id,
+                    "name": display_name,
                     "logo": tvg_logo.group(1) if tvg_logo else "",
-                    "categories": [group_title.group(1)] if group_title else ["Custom"],
-                    "country": "CUSTOM",
-                    "country_flag": "📺",
-                    "quality": "HD",
+                    "categories": cats,
+                    "country": c_code,
+                    "country_name": c_name,
+                    "country_flag": c_flag,
+                    "quality": quality,
                 }
             elif not line.startswith("#") and (line.startswith("http://") or line.startswith("https://")):
                 if current_meta:
                     current_meta["stream_url"] = line
+                    current_meta["available_streams"] = [{"url": line, "quality": current_meta.get("quality", "HD"), "feed": "Main"}]
                     channels.append(current_meta)
                     current_meta = {}
 

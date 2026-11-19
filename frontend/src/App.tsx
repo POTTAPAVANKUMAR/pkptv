@@ -7,8 +7,18 @@ import { Player } from './components/Player';
 import { SystemStatsModal } from './components/SystemStatsModal';
 import { CustomPlaylistModal } from './components/CustomPlaylistModal';
 import { DvrModal } from './components/DvrModal';
+import { XtreamModal } from './components/XtreamModal';
+import { VodCard } from './components/VodCard';
 import { api } from './services/api';
-import { Category, Channel, Country, SystemStats, VodItem } from './types';
+import {
+  Category,
+  Channel,
+  Country,
+  SystemStats,
+  VodItem,
+  XtreamAccount,
+  XtreamDownloadTask,
+} from './types';
 import {
   Tv,
   Sparkles,
@@ -16,6 +26,9 @@ import {
   Film,
   Radio,
   Bookmark,
+  Server,
+  HardDrive,
+  Zap,
 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -54,6 +67,21 @@ export const App: React.FC = () => {
   const [isCustomM3UOpen, setIsCustomM3UOpen] = useState<boolean>(false);
   const [isDvrOpen, setIsDvrOpen] = useState<boolean>(false);
   const [activeDvrCount, setActiveDvrCount] = useState<number>(0);
+  const [isXtreamOpen, setIsXtreamOpen] = useState<boolean>(false);
+  const [xtreamAccount, setXtreamAccount] = useState<XtreamAccount | null>(() => {
+    try {
+      const saved = localStorage.getItem('pkp_tv_xtream_account');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Local & Free Movie Datasets
+  const [localSavedMovies, setLocalSavedMovies] = useState<VodItem[]>([]);
+  const [freeCinemaMovies, setFreeCinemaMovies] = useState<VodItem[]>([]);
+  const [xtreamVodMovies, setXtreamVodMovies] = useState<VodItem[]>([]);
+  const [activeDownloads, setActiveDownloads] = useState<XtreamDownloadTask[]>([]);
   const [customPlaylist, setCustomPlaylist] = useState<{ name: string; channels: Channel[] } | null>(null);
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -222,16 +250,28 @@ export const App: React.FC = () => {
     loadChannels(true);
   }, [searchQuery, selectedCategory, selectedCountry, customPlaylist]);
 
-  // Load Movies Tab Channels
+  // Load Movies Tab (Channels, Saved Pi Movies, Free Cinema, Xtream VOD)
   useEffect(() => {
     const loadMovieTab = async () => {
       try {
-        const res = await api.getChannels({
-          category: 'movies',
-          country: movieTabCountry !== 'all' ? movieTabCountry : undefined,
-          limit: 80,
-        });
+        const [res, local, free] = await Promise.all([
+          api.getChannels({
+            category: 'movies',
+            country: movieTabCountry !== 'all' ? movieTabCountry : undefined,
+            limit: 80,
+          }),
+          api.getLocalMovies().catch(() => []),
+          api.getFreeMovies().catch(() => []),
+        ]);
         setMovieTabChannels(res.channels);
+        setLocalSavedMovies(local);
+        setFreeCinemaMovies(free);
+
+        if (xtreamAccount?.isActive && xtreamAccount.server && xtreamAccount.username) {
+          api.getXtreamVodStreams(xtreamAccount.server, xtreamAccount.username, xtreamAccount.password)
+            .then((v) => setXtreamVodMovies(v.slice(0, 50)))
+            .catch(() => {});
+        }
       } catch (e) {
         console.error('Failed to load movies tab channels:', e);
       }
@@ -239,7 +279,40 @@ export const App: React.FC = () => {
     if (activeTab === 'movies') {
       loadMovieTab();
     }
-  }, [activeTab, movieTabCountry]);
+  }, [activeTab, movieTabCountry, xtreamAccount]);
+
+  const handleSaveAccount = (acc: XtreamAccount | null) => {
+    setXtreamAccount(acc);
+    if (acc) {
+      localStorage.setItem('pkp_tv_xtream_account', JSON.stringify(acc));
+      api.getXtreamVodStreams(acc.server, acc.username, acc.password)
+        .then((v) => setXtreamVodMovies(v.slice(0, 50)))
+        .catch(() => {});
+    } else {
+      localStorage.removeItem('pkp_tv_xtream_account');
+      setXtreamVodMovies([]);
+    }
+  };
+
+  const handleDownloadMovie = async (movie: VodItem) => {
+    if (!movie.stream_url) return;
+    try {
+      await api.startMovieDownload(movie.title, movie.stream_url);
+      const dl = await api.getMovieDownloads();
+      setActiveDownloads(dl);
+    } catch (e) {
+      console.error('Failed to start download:', e);
+    }
+  };
+
+  const handleDeleteLocalMovie = async (filename?: string) => {
+    if (!filename) return;
+    if (confirm(`Delete '${filename}' from Pi storage?`)) {
+      await api.deleteLocalMovie(filename);
+      const updated = await api.getLocalMovies();
+      setLocalSavedMovies(updated);
+    }
+  };
 
   // Load Shows Tab Channels
   useEffect(() => {
@@ -357,6 +430,37 @@ export const App: React.FC = () => {
     }
   };
 
+  const quickPlaylists = [
+    { id: 'xtream-cat-movies', name: 'Cinema & Movies', icon: '🎬' },
+    { id: 'xtream-cat-sports', name: 'Live Sports', icon: '⚽' },
+    { id: 'xtream-cat-news', name: 'Global News', icon: '📰' },
+    { id: 'xtream-cat-entertainment', name: 'Entertainment', icon: '🍿' },
+    { id: 'xtream-country-us', name: 'USA Live', icon: '🇺🇸' },
+    { id: 'xtream-country-in', name: 'India Live', icon: '🇮🇳' },
+    { id: 'xtream-country-uk', name: 'UK Live', icon: '🇬🇧' },
+    { id: 'xtream-country-vn', name: 'Vietnam Live', icon: '🇻🇳' },
+    { id: 'xtream-trending-series', name: 'Trending Series', icon: '🔥' },
+  ];
+
+  const handleQuickLoadPlaylist = async (presetId: string) => {
+    setIsLoading(true);
+    try {
+      const res = await api.loadPreset(presetId);
+      if (res.channels && res.channels.length > 0) {
+        setCustomPlaylist({
+          name: `${res.preset.name} (${res.preset.badge || 'm3u8-xtream'})`,
+          channels: res.channels,
+        });
+        setActiveTab('live');
+        handleSelectChannel(res.channels[0]);
+      }
+    } catch (e) {
+      console.error('Failed to quick-load preset:', e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Top Google TV Header Bar */}
@@ -372,8 +476,12 @@ export const App: React.FC = () => {
         systemStats={systemStats}
         onOpenStats={() => setIsStatsOpen(true)}
         onOpenCustomM3U={() => setIsCustomM3UOpen(true)}
+        customPlaylistName={customPlaylist?.name}
+        onClearCustomPlaylist={() => setCustomPlaylist(null)}
         onOpenDvr={() => setIsDvrOpen(true)}
         activeDvrCount={activeDvrCount}
+        onOpenXtream={() => setIsXtreamOpen(true)}
+        isXtreamConnected={!!xtreamAccount?.isActive}
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
         watchlistCount={favorites.length}
@@ -381,6 +489,44 @@ export const App: React.FC = () => {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 md:px-8 py-6">
+        {/* Active Playlist Banner (m3u8-xtream) */}
+        {customPlaylist && (
+          <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-indigo-950/80 via-slate-900/90 to-cyan-950/80 border border-indigo-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
+                <Radio className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-white tracking-tight">
+                    {customPlaylist.name}
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] font-black uppercase tracking-wider">
+                    m3u8-xtream
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {channels.length} channels loaded • Play, search, favorite, or record with 12h DVR
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-end sm:self-center">
+              <button
+                onClick={() => setIsCustomM3UOpen(true)}
+                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 text-xs font-semibold transition-all"
+              >
+                Switch Playlist
+              </button>
+              <button
+                onClick={() => setCustomPlaylist(null)}
+                className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs font-semibold border border-rose-500/30 transition-all"
+              >
+                Clear & Reset
+              </button>
+            </div>
+          </div>
+        )}
         {/* Active Player Deck (always pinned on top when playing) */}
         {selectedChannel && (
           <div className="mb-8">
@@ -658,6 +804,172 @@ export const App: React.FC = () => {
               </div>
             </div>
 
+            {/* Active Pi Downloads Progress Banner */}
+            {activeDownloads.filter((d) => d.status === 'downloading').length > 0 && (
+              <div className="mb-6 p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-between text-xs text-indigo-300">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-ping" />
+                  <span className="font-bold">
+                    Saving {activeDownloads.filter((d) => d.status === 'downloading').length} movie(s) to Pi drive in background...
+                  </span>
+                </div>
+                <span className="text-[11px] opacity-80">Permanent Archive</span>
+              </div>
+            )}
+
+            {/* Section 1: Permanently Saved Movies on Pi Drive */}
+            {localSavedMovies.length > 0 && (
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                      <HardDrive className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-white">Permanently Saved on Pi Storage</h3>
+                      <p className="text-[11px] text-slate-400">Offline ready • Zero buffering • Never expires</p>
+                    </div>
+                  </div>
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">
+                    {localSavedMovies.length} {localSavedMovies.length === 1 ? 'Movie' : 'Movies'}
+                  </span>
+                </div>
+                <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
+                  {localSavedMovies.map((m) => (
+                    <VodCard
+                      key={m.id}
+                      item={m}
+                      onPlay={() => handlePlayVod(m)}
+                      isWatchlisted={favorites.includes(m.id)}
+                      onToggleWatchlist={(e) => {
+                        e.stopPropagation();
+                        toggleFavorite(m.id);
+                      }}
+                      onDelete={(e) => {
+                        e.stopPropagation();
+                        handleDeleteLocalMovie(m.filename);
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Section 2: Xtream Codes Provider Movies */}
+            {xtreamAccount?.isActive ? (
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center">
+                      <Zap className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-white">
+                        Xtream Provider VOD ({xtreamAccount.username})
+                      </h3>
+                      <p className="text-[11px] text-slate-400">
+                        On-demand movies from your provider • Click download icon to save permanently to Pi
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setIsXtreamOpen(true)}
+                    className="text-xs text-indigo-400 hover:text-indigo-300 font-bold"
+                  >
+                    Manage Account →
+                  </button>
+                </div>
+                {xtreamVodMovies.length > 0 ? (
+                  <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
+                    {xtreamVodMovies.map((m) => (
+                      <VodCard
+                        key={m.id}
+                        item={m}
+                        onPlay={() => handlePlayVod(m)}
+                        isWatchlisted={favorites.includes(m.id)}
+                        onToggleWatchlist={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite(m.id);
+                        }}
+                        onDownload={(e) => {
+                          e.stopPropagation();
+                          handleDownloadMovie(m);
+                        }}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-6 rounded-2xl bg-slate-900/60 border border-white/5 text-center text-xs text-slate-400">
+                    Loading movies from {xtreamAccount.server}...
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="mb-8 p-5 rounded-2xl bg-gradient-to-r from-indigo-900/30 to-purple-900/30 border border-indigo-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shrink-0">
+                    <Server className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">Connect Your Xtream Codes Subscription</h4>
+                    <p className="text-xs text-slate-400">
+                      Link your provider (e.g. 8kplayers.com) to stream thousands of movies and save them permanently to your Pi.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsXtreamOpen(true)}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold text-xs text-white shadow-lg shadow-indigo-600/30 transition-all shrink-0"
+                >
+                  Connect Xtream Account
+                </button>
+              </div>
+            )}
+
+            {/* Section 3: Free HD Cinema & Open Cinema */}
+            {freeCinemaMovies.length > 0 && (
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
+                      <Film className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-white">Free HD Cinema (Permanent)</h3>
+                      <p className="text-[11px] text-slate-400">
+                        Permanent open cinema • Full 1080p • Ready to watch or archive to Pi
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
+                  {freeCinemaMovies.map((m) => (
+                    <VodCard
+                      key={m.id}
+                      item={m}
+                      onPlay={() => handlePlayVod(m)}
+                      isWatchlisted={favorites.includes(m.id)}
+                      onToggleWatchlist={(e) => {
+                        e.stopPropagation();
+                        toggleFavorite(m.id);
+                      }}
+                      onDownload={(e) => {
+                        e.stopPropagation();
+                        handleDownloadMovie(m);
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Section 4: 24/7 Live Broadcast Channels */}
+            <div className="mb-4">
+              <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-2">
+                24/7 Live Cinema Channels
+              </h3>
+            </div>
+
             {/* Movie Channels Grid */}
             {movieTabChannels.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -760,6 +1072,30 @@ export const App: React.FC = () => {
             ========================================================================= */}
         {activeTab === 'live' && (
           <div>
+            {/* Quick Presets Bar from m3u8-xtream */}
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-3 mb-3">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-1.5 px-2">
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                m3u8-xtream:
+              </span>
+              {quickPlaylists.map((qp) => (
+                <button
+                  key={qp.id}
+                  onClick={() => handleQuickLoadPlaylist(qp.id)}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-indigo-600/30 text-slate-300 hover:text-white border border-white/10 hover:border-indigo-500/40 transition-all shrink-0 flex items-center gap-1.5"
+                >
+                  <span>{qp.icon}</span>
+                  <span>{qp.name}</span>
+                </button>
+              ))}
+              <button
+                onClick={() => setIsCustomM3UOpen(true)}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 transition-all shrink-0 flex items-center gap-1"
+              >
+                + Browse All Presets
+              </button>
+            </div>
+
             {/* Category Filter Pills */}
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-3 mb-6">
               <button
@@ -927,13 +1263,16 @@ export const App: React.FC = () => {
         onClose={() => setIsStatsOpen(false)}
       />
 
-      {/* Custom M3U Modal */}
+      {/* Custom M3U / m3u8-xtream Modal */}
       <CustomPlaylistModal
         isOpen={isCustomM3UOpen}
         onClose={() => setIsCustomM3UOpen(false)}
         onPlaylistLoaded={(importedChannels, name) => {
           setCustomPlaylist({ name, channels: importedChannels });
           setActiveTab('live');
+          if (importedChannels.length > 0) {
+            handleSelectChannel(importedChannels[0]);
+          }
         }}
       />
 
@@ -942,6 +1281,25 @@ export const App: React.FC = () => {
         isOpen={isDvrOpen}
         onClose={() => setIsDvrOpen(false)}
         onSelectChannel={handleSelectChannel}
+      />
+
+      {/* Xtream Codes & Self-Hosted Server Modal */}
+      <XtreamModal
+        isOpen={isXtreamOpen}
+        onClose={() => setIsXtreamOpen(false)}
+        account={xtreamAccount}
+        onSaveAccount={handleSaveAccount}
+        onLoadLiveChannels={(xtreamChannels, name) => {
+          setCustomPlaylist({ name, channels: xtreamChannels });
+          setActiveTab('live');
+          if (xtreamChannels.length > 0) {
+            handleSelectChannel(xtreamChannels[0]);
+          }
+        }}
+        onSwitchToMovies={() => {
+          setActiveTab('movies');
+          setIsXtreamOpen(false);
+        }}
       />
     </div>
   );

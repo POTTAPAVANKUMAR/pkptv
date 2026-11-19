@@ -11,6 +11,10 @@ env/
 venv/
 .venv/
 data/*.json
+backend/data/*.json
+backend/data/movies/
+backend/data/playlist_cache/
+backend/data/dvr/
 
 # Node & Frontend
 node_modules/

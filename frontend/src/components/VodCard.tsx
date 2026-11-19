@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Star, Tv } from 'lucide-react';
+import { Play, Star, Tv, Download, Trash2 } from 'lucide-react';
 import { VodItem } from '../types';
 
 interface VodCardProps {
@@ -7,6 +7,8 @@ interface VodCardProps {
   onPlay: () => void;
   isWatchlisted: boolean;
   onToggleWatchlist: (e: React.MouseEvent) => void;
+  onDownload?: (e: React.MouseEvent) => void;
+  onDelete?: (e: React.MouseEvent) => void;
 }
 
 export const VodCard: React.FC<VodCardProps> = ({
@@ -14,6 +16,8 @@ export const VodCard: React.FC<VodCardProps> = ({
   onPlay,
   isWatchlisted,
   onToggleWatchlist,
+  onDownload,
+  onDelete,
 }) => {
   const [imgError, setImgError] = useState(false);
 
@@ -41,10 +45,29 @@ export const VodCard: React.FC<VodCardProps> = ({
           </div>
         )}
 
-        {/* Live Indicator Pill on top-left */}
+        {/* Top-left Indicator Pill */}
         <div className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/75 backdrop-blur-md text-[9px] font-black text-white border border-white/10">
-          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-live-dot" />
-          <span>LIVE</span>
+          {item.is_local ? (
+            <>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span className="text-emerald-300">SAVED PI</span>
+            </>
+          ) : item.is_free ? (
+            <>
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+              <span className="text-cyan-300">FREE HD</span>
+            </>
+          ) : item.is_xtream ? (
+            <>
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+              <span className="text-purple-300">VOD MOVIE</span>
+            </>
+          ) : (
+            <>
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-live-dot" />
+              <span>LIVE</span>
+            </>
+          )}
         </div>
 
         {/* Quality Pill on top-right */}
@@ -67,29 +90,54 @@ export const VodCard: React.FC<VodCardProps> = ({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 mb-0.5">
             <span className="text-xs" title={item.country || 'Live'}>
-              {item.country === 'IN' ? '🇮🇳' : item.country === 'US' ? '🇺🇸' : '🌐'}
+              {item.country === 'IN' ? '🇮🇳' : item.country === 'US' ? '🇺🇸' : item.country_flag || '🌐'}
             </span>
             <h3 className="text-xs md:text-sm font-bold text-white truncate group-hover:text-indigo-400 transition-colors">
               {item.title}
             </h3>
           </div>
           <p className="text-[11px] text-slate-400 truncate">
-            {item.genres && item.genres.length > 0 ? item.genres.join(', ') : 'Live Channel'}
+            {item.duration ? `${item.duration} • ` : ''}
+            {item.genres && item.genres.length > 0 ? item.genres.join(', ') : 'Cinema'}
           </p>
         </div>
 
-        {/* Favorite Bookmark */}
-        <button
-          onClick={onToggleWatchlist}
-          title={isWatchlisted ? 'Remove from favorites' : 'Add to favorites'}
-          className={`p-1.5 rounded-xl transition-all shrink-0 ${
-            isWatchlisted
-              ? 'text-amber-400 bg-amber-400/15 hover:bg-amber-400/25'
-              : 'text-slate-400 hover:text-white hover:bg-white/10'
-          }`}
-        >
-          <Star className={`w-3.5 h-3.5 ${isWatchlisted ? 'fill-current text-amber-400' : ''}`} />
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          {/* Download to Pi Button */}
+          {onDownload && (
+            <button
+              onClick={onDownload}
+              title="Download & Save to Pi Storage (Permanent)"
+              className="p-1.5 rounded-xl text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {/* Delete from Local Pi Storage */}
+          {onDelete && (
+            <button
+              onClick={onDelete}
+              title="Delete from Pi Storage"
+              className="p-1.5 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {/* Favorite Bookmark */}
+          <button
+            onClick={onToggleWatchlist}
+            title={isWatchlisted ? 'Remove from favorites' : 'Add to favorites'}
+            className={`p-1.5 rounded-xl transition-all ${
+              isWatchlisted
+                ? 'text-amber-400 bg-amber-400/15 hover:bg-amber-400/25'
+                : 'text-slate-400 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <Star className={`w-3.5 h-3.5 ${isWatchlisted ? 'fill-current text-amber-400' : ''}`} />
+          </button>
+        </div>
       </div>
     </div>
   );

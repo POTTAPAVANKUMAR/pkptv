@@ -1,4 +1,15 @@
-import { Category, Channel, Country, SystemStats, VodItem, StreamingProvider, DvrRecording } from '../types';
+import {
+  Category,
+  Channel,
+  Country,
+  SystemStats,
+  VodItem,
+  StreamingProvider,
+  DvrRecording,
+  LocalXtreamUser,
+  XtreamDownloadTask,
+  PlaylistPreset,
+} from '../types';
 
 const API_BASE = '/api/v1';
 
@@ -63,6 +74,23 @@ export const api = {
     if (!res.ok) throw new Error(`Failed to parse playlist: HTTP ${res.status}`);
     const data = await res.json();
     return data.channels || [];
+  },
+
+  async getPlaylistPresets(): Promise<PlaylistPreset[]> {
+    const res = await fetch(`${API_BASE}/playlists/presets`);
+    if (!res.ok) throw new Error(`Failed to load presets: HTTP ${res.status}`);
+    const data = await res.json();
+    return data.presets || [];
+  },
+
+  async loadPreset(presetId: string): Promise<{ preset: PlaylistPreset; channels: Channel[]; total: number }> {
+    const res = await fetch(`${API_BASE}/playlists/load-preset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ preset_id: presetId }),
+    });
+    if (!res.ok) throw new Error(`Failed to load preset: HTTP ${res.status}`);
+    return res.json();
   },
 
   async parseUploadedM3U(file: File): Promise<Channel[]> {
@@ -164,5 +192,139 @@ export const api = {
     if (!res.ok) return null;
     const data = await res.json();
     return data.is_active !== undefined ? data : null;
+  },
+
+  // =========================================================================
+  // VOD Movies (Free, Local, Downloads)
+  // =========================================================================
+  async getFreeMovies(): Promise<VodItem[]> {
+    const res = await fetch(`${API_BASE}/vod/free`);
+    if (!res.ok) throw new Error(`Failed to load free movies: HTTP ${res.status}`);
+    const data = await res.json();
+    return data.movies || [];
+  },
+
+  async getLocalMovies(): Promise<VodItem[]> {
+    const res = await fetch(`${API_BASE}/vod/local`);
+    if (!res.ok) throw new Error(`Failed to load local movies: HTTP ${res.status}`);
+    const data = await res.json();
+    return data.movies || [];
+  },
+
+  async deleteLocalMovie(filename: string): Promise<boolean> {
+    const res = await fetch(`${API_BASE}/vod/local/${encodeURIComponent(filename)}`, {
+      method: 'DELETE',
+    });
+    return res.ok;
+  },
+
+  async startMovieDownload(title: string, stream_url: string): Promise<XtreamDownloadTask> {
+    const res = await fetch(`${API_BASE}/vod/download`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, stream_url }),
+    });
+    if (!res.ok) throw new Error(`Failed to start download: HTTP ${res.status}`);
+    const data = await res.json();
+    return data.task;
+  },
+
+  async getMovieDownloads(): Promise<XtreamDownloadTask[]> {
+    const res = await fetch(`${API_BASE}/vod/downloads`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.downloads || [];
+  },
+
+  async cancelMovieDownload(taskId: string): Promise<boolean> {
+    const res = await fetch(`${API_BASE}/vod/download/${encodeURIComponent(taskId)}/cancel`, {
+      method: 'POST',
+    });
+    return res.ok;
+  },
+
+  // =========================================================================
+  // Upstream Xtream Client Connector (8kplayers.com, etc.)
+  // =========================================================================
+  async testXtreamAuth(server: string, username: string, password: string): Promise<any> {
+    const res = await fetch(`${API_BASE}/xtream/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ server, username, password }),
+    });
+    if (!res.ok) throw new Error(`Xtream auth failed: HTTP ${res.status}`);
+    return res.json();
+  },
+
+  async getXtreamVodCategories(server: string, username: string, password: string): Promise<any[]> {
+    const params = new URLSearchParams({ server, username, password });
+    const res = await fetch(`${API_BASE}/xtream/vod/categories?${params.toString()}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.categories || [];
+  },
+
+  async getXtreamVodStreams(
+    server: string,
+    username: string,
+    password: string,
+    categoryId?: string
+  ): Promise<VodItem[]> {
+    const params = new URLSearchParams({ server, username, password });
+    if (categoryId) params.set('category_id', categoryId);
+    const res = await fetch(`${API_BASE}/xtream/vod/streams?${params.toString()}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.movies || [];
+  },
+
+  async getXtreamLiveStreams(
+    server: string,
+    username: string,
+    password: string,
+    format: string = 'm3u8'
+  ): Promise<Channel[]> {
+    const params = new URLSearchParams({ server, username, password, format });
+    const res = await fetch(`${API_BASE}/xtream/live/streams?${params.toString()}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.channels || [];
+  },
+
+  // =========================================================================
+  // Self-Hosted Xtream Server (Local Users on Pi)
+  // =========================================================================
+  async getLocalXtreamUsers(): Promise<LocalXtreamUser[]> {
+    const res = await fetch(`${API_BASE}/xtream/local/users`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.users || [];
+  },
+
+  async createLocalXtreamUser(payload: {
+    username: string;
+    password: string;
+    exp_days?: number;
+    max_connections?: number;
+    notes?: string;
+  }): Promise<LocalXtreamUser> {
+    const res = await fetch(`${API_BASE}/xtream/local/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Failed to create user: HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    return data.user;
+  },
+
+  async deleteLocalXtreamUser(username: string): Promise<boolean> {
+    const res = await fetch(`${API_BASE}/xtream/local/users/${encodeURIComponent(username)}`, {
+      method: 'DELETE',
+    });
+    return res.ok;
   },
 };

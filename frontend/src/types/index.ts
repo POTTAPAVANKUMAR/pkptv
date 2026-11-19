@@ -54,6 +54,46 @@ export interface VodItem {
   stream_url?: string;
   is_streamable?: boolean;
   quality?: string;
+  is_local?: boolean;
+  is_free?: boolean;
+  is_xtream?: boolean;
+  filename?: string;
+  file_size_mb?: number;
+}
+
+export interface XtreamAccount {
+  server: string;
+  username: string;
+  password: string;
+  format: 'm3u8' | 'ts';
+  isActive?: boolean;
+  status?: string;
+  exp_date?: string;
+  max_connections?: string;
+}
+
+export interface XtreamDownloadTask {
+  id: string;
+  title: string;
+  stream_url: string;
+  filename: string;
+  total_bytes: number;
+  downloaded_bytes: number;
+  progress_percent: number;
+  speed_kbps: number;
+  status: 'starting' | 'downloading' | 'completed' | 'cancelled' | 'error';
+  error?: string;
+  started_at: number;
+}
+
+export interface LocalXtreamUser {
+  username: string;
+  password: string;
+  created_at: number;
+  exp_date: number;
+  max_connections: number;
+  active: boolean;
+  notes?: string;
 }
 
 export interface StreamingProvider {
@@ -122,3 +162,17 @@ export interface DvrRecording {
   buffered_display: string;
   elapsed_seconds: number;
 }
+
+export interface PlaylistPreset {
+  id: string;
+  name: string;
+  category: string;
+  group: 'Featured' | 'Categories' | 'Countries' | 'Genres' | 'Master';
+  icon: string;
+  badge: string;
+  description: string;
+  url: string;
+  original_url?: string;
+  channel_count?: string;
+}
+

@@ -3,7 +3,6 @@ import {
   Search,
   X,
   Cpu,
-  PlusCircle,
   RefreshCw,
   Tv,
   FileCode2,
@@ -11,6 +10,7 @@ import {
   Film,
   Radio,
   Bookmark,
+  Server,
 } from 'lucide-react';
 import { SystemStats } from '../types';
 
@@ -26,8 +26,12 @@ interface HeaderProps {
   systemStats: SystemStats | null;
   onOpenStats: () => void;
   onOpenCustomM3U: () => void;
+  customPlaylistName?: string | null;
+  onClearCustomPlaylist?: () => void;
   onOpenDvr: () => void;
   activeDvrCount?: number;
+  onOpenXtream: () => void;
+  isXtreamConnected?: boolean;
   onRefresh: () => void;
   isRefreshing: boolean;
   watchlistCount: number;
@@ -43,8 +47,12 @@ export const Header: React.FC<HeaderProps> = ({
   systemStats,
   onOpenStats,
   onOpenCustomM3U,
+  customPlaylistName,
+  onClearCustomPlaylist,
   onOpenDvr,
   activeDvrCount = 0,
+  onOpenXtream,
+  isXtreamConnected = false,
   onRefresh,
   isRefreshing,
   watchlistCount,
@@ -151,15 +159,59 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </button>
 
-          {/* Add custom M3U */}
+          {/* Xtream & Media Server Button */}
           <button
-            onClick={onOpenCustomM3U}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-200 text-xs font-semibold border border-white/10 transition-all"
-            title="Import external M3U playlist"
+            onClick={onOpenXtream}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-xs font-semibold ${
+              isXtreamConnected
+                ? 'bg-indigo-600/25 text-indigo-300 border-indigo-500/50 shadow-sm'
+                : 'bg-white/5 hover:bg-white/10 text-slate-200 border-white/10'
+            }`}
+            title="Xtream Codes Provider & Self-Hosted Pi Server"
           >
-            <PlusCircle className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="hidden lg:inline">+ M3U</span>
+            <Server className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="hidden lg:inline">Xtream</span>
+            {isXtreamConnected && (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
+            )}
           </button>
+
+          {/* m3u8-xtream & Custom Playlists Button */}
+          <div className="flex items-center">
+            <button
+              onClick={onOpenCustomM3U}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                customPlaylistName
+                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-sm'
+                  : 'bg-white/5 hover:bg-white/10 text-slate-200 border-white/10'
+              }`}
+              title="m3u8-xtream Curated Playlists & Custom M3U"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden lg:inline">
+                {customPlaylistName
+                  ? customPlaylistName.length > 18
+                    ? `${customPlaylistName.slice(0, 18)}...`
+                    : customPlaylistName
+                  : 'Playlists'}
+              </span>
+              <span className="px-1.5 py-0.2 rounded-full bg-cyan-400/20 text-cyan-300 text-[10px] font-black">
+                {customPlaylistName ? 'Active' : 'm3u8'}
+              </span>
+              {customPlaylistName && onClearCustomPlaylist && (
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClearCustomPlaylist();
+                  }}
+                  className="hover:text-rose-400 p-0.5 rounded cursor-pointer transition-colors ml-1"
+                  title="Clear active playlist"
+                >
+                  <X className="w-3 h-3" />
+                </span>
+              )}
+            </button>
+          </div>
 
           {/* Pi System Monitor Pill */}
           <button

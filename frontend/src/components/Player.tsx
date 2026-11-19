@@ -19,6 +19,8 @@ import {
   RotateCw,
   Radio,
   X,
+  Download,
+  HardDrive,
 } from 'lucide-react';
 import { Channel, DvrRecording } from '../types';
 import { api } from '../services/api';
@@ -135,7 +137,25 @@ export const Player: React.FC<PlayerProps> = ({
     }
   };
 
-  // Initialize and attach HLS stream
+  const [downloadNotice, setDownloadNotice] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
+
+  const handleSaveToPi = async () => {
+    if (isDownloading) return;
+    setIsDownloading(true);
+    try {
+      await api.startMovieDownload(channel.name, channel.stream_url);
+      setDownloadNotice('Download started! Saving permanently to Pi storage.');
+      setTimeout(() => setDownloadNotice(null), 6000);
+    } catch (err: any) {
+      setDownloadNotice(`Download failed: ${err.message || 'Error'}`);
+      setTimeout(() => setDownloadNotice(null), 5000);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  // Initialize and attach HLS or Direct MP4 stream
   const setupStream = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -151,6 +171,40 @@ export const Player: React.FC<PlayerProps> = ({
       hlsRef.current = null;
     }
 
+    const isDirectVideo =
+      streamUrl.toLowerCase().includes('.mp4') ||
+      streamUrl.toLowerCase().includes('.mkv') ||
+      streamUrl.toLowerCase().includes('.webm') ||
+      streamUrl.includes('/movie/') ||
+      streamUrl.includes('/vod/stream/');
+
+    if (isDirectVideo) {
+      video.src = streamUrl;
+      setIsLiveStream(false);
+
+      const onMeta = () => {
+        setIsLoading(false);
+        if (Number.isFinite(video.duration)) {
+          setDuration(video.duration);
+        }
+        video.play().catch(() => setIsPlaying(false));
+      };
+
+      const onDirectErr = () => {
+        if (!useProxy && !streamUrl.startsWith('/api/v1/proxy')) {
+          console.warn('Direct MP4 playback error. Switching to stream proxy...');
+          setUseProxy(true);
+        } else {
+          setError('Failed to play video file. File missing or server offline.');
+          setIsLoading(false);
+        }
+      };
+
+      video.addEventListener('loadedmetadata', onMeta);
+      video.addEventListener('error', onDirectErr);
+      return;
+    }
+
     if (Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
@@ -159,7 +213,14 @@ export const Player: React.FC<PlayerProps> = ({
       });
 
       hlsRef.current = hls;
-      hls.loadSource(streamUrl);
+
+      // In web browsers, live MPEG-TS URLs (.ts) are accessed via HLS (.m3u8) for native MSE decoding
+      let sourceUrl = streamUrl;
+      if (sourceUrl.includes('/live/') && sourceUrl.endsWith('.ts')) {
+        sourceUrl = sourceUrl.replace(/\.ts$/, '.m3u8');
+      }
+
+      hls.loadSource(sourceUrl);
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
@@ -475,6 +536,13 @@ export const Player: React.FC<PlayerProps> = ({
         isFullscreen ? 'rounded-none' : ''
       }`}
     >
+      {/* Download to Pi Notice Toast */}
+      {downloadNotice && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-xl bg-slate-900/95 border border-indigo-500/50 shadow-2xl backdrop-blur-md text-xs font-bold text-indigo-300 flex items-center gap-2 z-50">
+          <HardDrive className="w-4 h-4 text-indigo-400 shrink-0" />
+          <span>{downloadNotice}</span>
+        </div>
+      )}
       {/* Video Element */}
       <video
         ref={videoRef}
@@ -816,6 +884,19 @@ export const Player: React.FC<PlayerProps> = ({
                 ))}
               </select>
             )}
+
+            <button
+              onClick={handleSaveToPi}
+              disabled={isDownloading}
+              title="Save Movie to Pi Storage (Permanent Archive)"
+              className={`p-2 rounded-xl transition-all ${
+                isDownloading
+                  ? 'bg-amber-500/20 text-amber-400 animate-pulse'
+                  : 'bg-white/10 text-slate-300 hover:bg-white/20 hover:text-white'
+              }`}
+            >
+              <Download className="w-4 h-4" />
+            </button>
 
             <button
               onClick={togglePiP}
