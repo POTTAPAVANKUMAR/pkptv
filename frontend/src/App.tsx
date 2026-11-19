@@ -531,6 +531,7 @@ export const App: React.FC = () => {
         {selectedChannel && (
           <div className="mb-8">
             <Player
+              key={selectedChannel.id}
               channel={selectedChannel}
               onClose={() => setSelectedChannel(null)}
               onNext={handleNextChannel}

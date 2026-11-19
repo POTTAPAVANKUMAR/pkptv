@@ -241,6 +241,11 @@ class XtreamService:
 
                 normalized = []
                 for c in channels:
+                    name = c.get("name") or "Live Channel"
+                    # Filter out IPTV provider dummy separator/banner lines that have no stream
+                    if any(marker in name for marker in ["#####", "=====", "-----", "*****", ">>>>>", "<<<<<"]):
+                        continue
+
                     stream_id = c.get("stream_id")
                     fmt = "m3u8" if stream_format.lower() == "m3u8" else "ts"
                     stream_url = f"{base}/live/{user}/{password}/{stream_id}.{fmt}"
@@ -248,7 +253,7 @@ class XtreamService:
                     normalized.append(
                         {
                             "id": f"xtream_live_{stream_id}",
-                            "name": c.get("name") or "Live Channel",
+                            "name": name,
                             "logo": c.get("stream_icon") or "",
                             "country": "XX",
                             "country_name": "Xtream Provider",

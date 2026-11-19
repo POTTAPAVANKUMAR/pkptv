@@ -61,6 +61,7 @@ class StreamProxyService:
         client = httpx.AsyncClient(
             timeout=httpx.Timeout(timeout=None, connect=10.0, read=None),
             follow_redirects=True,
+            verify=False,
         )
 
         try:

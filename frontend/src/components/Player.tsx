@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Hls from 'hls.js';
-import mpegts from 'mpegts.js';
 import {
   Play,
   Pause,
@@ -58,7 +57,6 @@ export const Player: React.FC<PlayerProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
-  const mpegPlayerRef = useRef<mpegts.Player | null>(null);
 
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [volume, setVolume] = useState<number>(() => {
@@ -120,13 +118,19 @@ export const Player: React.FC<PlayerProps> = ({
     };
   }, [channel.id]);
 
+  // In web browsers, live streams (.ts) require HLS manifests (.m3u8) for native MSE decoding
+  let cleanStreamUrl = channel.stream_url;
+  if (cleanStreamUrl.includes('/live/') && cleanStreamUrl.toLowerCase().endsWith('.ts')) {
+    cleanStreamUrl = cleanStreamUrl.replace(/\.ts$/i, '.m3u8');
+  }
+
   // Determine stream URL (DVR, proxied, or direct)
   const streamUrl =
     isWatchingDvr && dvrRecording?.dvr_url
       ? dvrRecording.dvr_url
       : useProxy
-      ? api.getProxiedStreamUrl(channel.stream_url)
-      : channel.stream_url;
+      ? api.getProxiedStreamUrl(cleanStreamUrl)
+      : cleanStreamUrl;
 
   const isDirectVideo =
     channel.stream_url.toLowerCase().includes('.mp4') ||
@@ -186,14 +190,10 @@ export const Player: React.FC<PlayerProps> = ({
     setCurrentTime(0);
     setDuration(0);
 
-    // Destroy existing player instances if any
+    // Destroy existing HLS instance if any
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
-    }
-    if (mpegPlayerRef.current) {
-      mpegPlayerRef.current.destroy();
-      mpegPlayerRef.current = null;
     }
 
     const isDirectVideo =
@@ -230,55 +230,7 @@ export const Player: React.FC<PlayerProps> = ({
       return;
     }
 
-    // Direct MPEG-TS Stream Playback via mpegts.js (MSE demuxing in browser)
-    const isMpegTs =
-      !isWatchingDvr &&
-      (streamUrl.toLowerCase().includes('.ts') ||
-        channel.stream_url.toLowerCase().endsWith('.ts'));
-
-    if (isMpegTs && mpegts.isSupported()) {
-      setIsLiveStream(true);
-      try {
-        const player = mpegts.createPlayer(
-          {
-            type: 'mse',
-            isLive: true,
-            url: streamUrl,
-          },
-          {
-            enableWorker: true,
-            lazyLoadMaxDuration: 3 * 60,
-            seekType: 'range',
-            liveBufferLatencyChasing: true,
-          }
-        );
-
-        mpegPlayerRef.current = player;
-        player.attachMediaElement(video);
-        player.load();
-
-        player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string) => {
-          console.warn('mpegts error:', errorType, errorDetail);
-          if (!useProxy && !streamUrl.startsWith('/api/v1/proxy')) {
-            setUseProxy(true);
-          } else {
-            setError('Failed to play live MPEG-TS stream. Channel may be offline.');
-            setIsLoading(false);
-          }
-        });
-
-        const onPlaying = () => {
-          setIsLoading(false);
-          setIsPlaying(true);
-        };
-        video.addEventListener('playing', onPlaying);
-        video.play().catch(() => setIsPlaying(false));
-        return;
-      } catch (err) {
-        console.warn('mpegts player creation error, falling back to HLS:', err);
-      }
-    }
-
+    // Live Streaming via Hls.js
     if (Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
@@ -288,18 +240,12 @@ export const Player: React.FC<PlayerProps> = ({
 
       hlsRef.current = hls;
 
-      // In web browsers, live MPEG-TS URLs (.ts) are accessed via HLS (.m3u8) for native MSE decoding
-      let sourceUrl = streamUrl;
-      const decodedSource = decodeURIComponent(sourceUrl);
-      if (decodedSource.includes('/live/') && decodedSource.endsWith('.ts')) {
-        sourceUrl = sourceUrl.replace(/\.ts$/, '.m3u8');
-      }
-
-      hls.loadSource(sourceUrl);
+      hls.loadSource(streamUrl);
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
         setIsLoading(false);
+        setError(null);
         const levels = data.levels.map((lvl, index) => ({
           id: index,
           height: lvl.height,
@@ -321,16 +267,17 @@ export const Player: React.FC<PlayerProps> = ({
                 console.warn('Direct stream failed. Auto-switching to stream proxy...');
                 setUseProxy(true);
               } else {
-                setError('Failed to load stream (Server offline or invalid stream).');
-                setIsLoading(false);
+                console.warn('HLS Network Error, attempting recovery...');
+                hls.startLoad();
               }
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
+              console.warn('HLS Media Error, attempting recovery...');
               hls.recoverMediaError();
               break;
             default:
               hls.destroy();
-              setError('Playback error encountered.');
+              setError('Failed to play stream. Server may be offline or stream format unsupported.');
               setIsLoading(false);
               break;
           }
@@ -341,6 +288,7 @@ export const Player: React.FC<PlayerProps> = ({
       video.src = streamUrl;
       video.addEventListener('loadedmetadata', () => {
         setIsLoading(false);
+        setError(null);
         video.play().catch(() => setIsPlaying(false));
       });
       video.addEventListener('error', () => {
@@ -363,10 +311,6 @@ export const Player: React.FC<PlayerProps> = ({
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
-      }
-      if (mpegPlayerRef.current) {
-        mpegPlayerRef.current.destroy();
-        mpegPlayerRef.current = null;
       }
     };
   }, [setupStream]);
