@@ -223,6 +223,122 @@ class XtreamService:
                 logger.error(f"Failed to fetch VOD streams: {e}")
                 return []
 
+    # =========================================================================
+    # TV Series & Shows Controller (Seasons & Episodes)
+    # =========================================================================
+    async def get_upstream_series_categories(self, server: str, user: str, password: str) -> List[Dict[str, Any]]:
+        base = self._clean_server_url(server)
+        api_url = f"{base}/player_api.php"
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, verify=False) as client:
+            try:
+                resp = await client.get(
+                    api_url,
+                    params={"username": user, "password": password, "action": "get_series_categories"},
+                    headers={"User-Agent": "IPTVSmartersPro"},
+                )
+                return resp.json() if resp.status_code == 200 else []
+            except Exception as e:
+                logger.error(f"Failed to fetch series categories: {e}")
+                return []
+
+    async def get_upstream_series(
+        self,
+        server: str,
+        user: str,
+        password: str,
+        category_id: Optional[str] = None,
+        search: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        base = self._clean_server_url(server)
+        api_url = f"{base}/player_api.php"
+        params = {"username": user, "password": password, "action": "get_series"}
+        if category_id and category_id != "all":
+            params["category_id"] = str(category_id)
+
+        async with httpx.AsyncClient(timeout=25.0, follow_redirects=True, verify=False) as client:
+            try:
+                resp = await client.get(api_url, params=params, headers={"User-Agent": "IPTVSmartersPro"})
+                if resp.status_code != 200:
+                    return []
+                series_list = resp.json()
+
+                if search and search.strip():
+                    q = search.strip().lower()
+                    series_list = [s for s in series_list if q in (s.get("name") or "").lower()]
+
+                normalized = []
+                for s in series_list:
+                    series_id = s.get("series_id")
+                    name = s.get("name") or "Untitled Series"
+                    cover = s.get("cover") or ""
+                    rating = str(s.get("rating") or "")
+                    normalized.append(
+                        {
+                            "id": f"series_{series_id}",
+                            "series_id": series_id,
+                            "title": name,
+                            "name": name,
+                            "poster": cover,
+                            "backdrop": cover,
+                            "rating": f"★ {rating}" if rating else "TV Series",
+                            "year": str(s.get("releaseDate") or s.get("year") or ""),
+                            "plot": s.get("plot") or "",
+                            "cast": s.get("cast") or "",
+                            "genre": s.get("genre") or "",
+                            "category_id": str(s.get("category_id") or ""),
+                        }
+                    )
+                return normalized
+            except Exception as e:
+                logger.error(f"Failed to fetch series list: {e}")
+                return []
+            except Exception as e:
+                logger.error(f"Failed to fetch series list: {e}")
+                return []
+
+    async def get_upstream_series_info(
+        self, server: str, user: str, password: str, series_id: str
+    ) -> Dict[str, Any]:
+        base = self._clean_server_url(server)
+        api_url = f"{base}/player_api.php"
+        params = {
+            "username": user,
+            "password": password,
+            "action": "get_series_info",
+            "series_id": str(series_id),
+        }
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True, verify=False) as client:
+            try:
+                resp = await client.get(api_url, params=params, headers={"User-Agent": "IPTVSmartersPro"})
+                if resp.status_code != 200:
+                    return {}
+                data = resp.json()
+                raw_episodes = data.get("episodes", {})
+
+                # Precompute direct stream_url for every episode so player can play it immediately
+                normalized_episodes = {}
+                for season_num, eps in raw_episodes.items():
+                    normalized_episodes[season_num] = []
+                    for ep in eps:
+                        ep_id = ep.get("id")
+                        ext = ep.get("container_extension") or "mp4"
+                        stream_url = f"{base}/series/{user}/{password}/{ep_id}.{ext}"
+                        normalized_episodes[season_num].append(
+                            {
+                                **ep,
+                                "stream_url": stream_url,
+                            }
+                        )
+
+                return {
+                    "info": data.get("info", {}),
+                    "seasons": data.get("seasons", []),
+                    "episodes": normalized_episodes,
+                }
+            except Exception as e:
+                logger.error(f"Failed to fetch series info for {series_id}: {e}")
+                return {}
+
     async def get_upstream_live_streams(
         self, server: str, user: str, password: str, stream_format: str = "m3u8"
     ) -> List[Dict[str, Any]]:

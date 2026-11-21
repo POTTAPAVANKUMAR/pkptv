@@ -9,6 +9,8 @@ import { CustomPlaylistModal } from './components/CustomPlaylistModal';
 import { DvrModal } from './components/DvrModal';
 import { XtreamModal } from './components/XtreamModal';
 import { VodCard } from './components/VodCard';
+import { SeriesCard } from './components/SeriesCard';
+import { SeriesEpisodeModal } from './components/SeriesEpisodeModal';
 import { api } from './services/api';
 import {
   Category,
@@ -18,6 +20,8 @@ import {
   VodItem,
   XtreamAccount,
   XtreamDownloadTask,
+  XtreamSeriesItem,
+  XtreamEpisode,
 } from './types';
 import {
   Tv,
@@ -29,6 +33,7 @@ import {
   Server,
   HardDrive,
   Zap,
+  Search,
 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -62,6 +67,14 @@ export const App: React.FC = () => {
   const [movieTabCountry, setMovieTabCountry] = useState<string>('IN');
   const [showsTabChannels, setShowsTabChannels] = useState<Channel[]>([]);
   const [showsTabCountry, setShowsTabCountry] = useState<string>('IN');
+
+  // Series on-demand state
+  const [seriesList, setSeriesList] = useState<XtreamSeriesItem[]>([]);
+  const [selectedSeries, setSelectedSeries] = useState<XtreamSeriesItem | null>(null);
+  const [selectedSeriesCategory, setSelectedSeriesCategory] = useState<string>('453'); // Default to STAR MAA for Telugu TV / Bigg Boss
+  const [seriesSearchQuery, setSeriesSearchQuery] = useState<string>('');
+  const [showsSubTab, setShowsSubTab] = useState<'ondemand' | 'live'>('ondemand');
+  const [isLoadingSeries, setIsLoadingSeries] = useState<boolean>(false);
 
   const [isStatsOpen, setIsStatsOpen] = useState<boolean>(false);
   const [isCustomM3UOpen, setIsCustomM3UOpen] = useState<boolean>(false);
@@ -318,38 +331,75 @@ export const App: React.FC = () => {
   useEffect(() => {
     const loadShowsTab = async () => {
       try {
-        const res = await api.getChannels({
-          category: 'series',
-          country: showsTabCountry !== 'all' ? showsTabCountry : undefined,
-          limit: 80,
-        });
-        // If series count is small, also append entertainment channels
-        if (res.channels.length < 30) {
-          const entRes = await api.getChannels({
-            category: 'entertainment',
-            country: showsTabCountry !== 'all' ? showsTabCountry : undefined,
-            limit: 50,
-          });
-          const seen = new Set(res.channels.map((c) => c.id));
-          const merged = [...res.channels];
-          for (const ec of entRes.channels) {
-            if (!seen.has(ec.id)) {
-              merged.push(ec);
-              seen.add(ec.id);
-            }
-          }
-          setShowsTabChannels(merged);
+        if (showsSubTab === 'ondemand' && xtreamAccount?.isActive) {
+          setIsLoadingSeries(true);
+          const cat = selectedSeriesCategory !== 'all' ? selectedSeriesCategory : undefined;
+          const s = await api.getXtreamSeries(
+            xtreamAccount.server,
+            xtreamAccount.username,
+            xtreamAccount.password,
+            cat,
+            seriesSearchQuery
+          );
+          setSeriesList(s);
+          setIsLoadingSeries(false);
         } else {
-          setShowsTabChannels(res.channels);
+          const res = await api.getChannels({
+            category: 'series',
+            country: showsTabCountry !== 'all' ? showsTabCountry : undefined,
+            limit: 80,
+          });
+          // If series count is small, also append entertainment channels
+          if (res.channels.length < 30) {
+            const entRes = await api.getChannels({
+              category: 'entertainment',
+              country: showsTabCountry !== 'all' ? showsTabCountry : undefined,
+              limit: 50,
+            });
+            const seen = new Set(res.channels.map((c) => c.id));
+            const merged = [...res.channels];
+            for (const ec of entRes.channels) {
+              if (!seen.has(ec.id)) {
+                merged.push(ec);
+                seen.add(ec.id);
+              }
+            }
+            setShowsTabChannels(merged);
+          } else {
+            setShowsTabChannels(res.channels);
+          }
         }
       } catch (e) {
-        console.error('Failed to load shows tab channels:', e);
+        console.error('Failed to load shows tab channels/series:', e);
+        setIsLoadingSeries(false);
       }
     };
     if (activeTab === 'shows') {
       loadShowsTab();
     }
-  }, [activeTab, showsTabCountry]);
+  }, [
+    activeTab,
+    showsTabCountry,
+    showsSubTab,
+    selectedSeriesCategory,
+    seriesSearchQuery,
+    xtreamAccount,
+  ]);
+
+  const handlePlayEpisode = (ep: XtreamEpisode, series: XtreamSeriesItem) => {
+    const channelAdapter: Channel = {
+      id: `series_${series.series_id}_ep_${ep.id}`,
+      name: `${series.title || series.name} - ${ep.title}`,
+      logo: ep.info?.movie_image || series.poster || '',
+      country: 'IN',
+      country_name: 'India',
+      country_flag: '🇮🇳',
+      categories: ['TV Series', series.genre || 'Entertainment'],
+      stream_url: ep.stream_url,
+      quality: '1080p FHD',
+    };
+    handleSelectChannel(channelAdapter);
+  };
 
   const toggleFavorite = (channelId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -995,7 +1045,7 @@ export const App: React.FC = () => {
         )}
 
         {/* =========================================================================
-            TAB 3: SHOWS (24/7 TV Series & Serials)
+            TAB 3: SHOWS (TV Series & On-Demand Episodes)
             ========================================================================= */}
         {activeTab === 'shows' && (
           <div>
@@ -1003,66 +1053,226 @@ export const App: React.FC = () => {
               <div>
                 <h2 className="text-2xl font-black text-white flex items-center gap-2">
                   <Tv className="w-6 h-6 text-indigo-400" />
-                  Live TV Series & Entertainment Channels
+                  TV Series & On-Demand Shows
                 </h2>
                 <p className="text-xs text-slate-400 mt-1">
-                  Continuous 24/7 drama serials, sitcoms, crime series, and entertainment television.
+                  Full multi-season serials, daily reality shows, and continuous entertainment television.
                 </p>
               </div>
 
-              {/* Country selector chips */}
-              <div className="flex items-center gap-2">
+              {/* Sub-tab Switcher: On-Demand Series vs Live Channels */}
+              {xtreamAccount?.isActive ? (
+                <div className="flex items-center gap-2 bg-white/5 p-1 rounded-2xl border border-white/10">
+                  <button
+                    onClick={() => setShowsSubTab('ondemand')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      showsSubTab === 'ondemand'
+                        ? 'bg-indigo-600 text-white shadow-md'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Zap className="w-3.5 h-3.5 text-amber-400" />
+                    <span>On-Demand Series</span>
+                  </button>
+                  <button
+                    onClick={() => setShowsSubTab('live')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      showsSubTab === 'live'
+                        ? 'bg-indigo-600 text-white shadow-md'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Tv className="w-3.5 h-3.5" />
+                    <span>24/7 Live Channels</span>
+                  </button>
+                </div>
+              ) : (
                 <button
-                  onClick={() => setShowsTabCountry('IN')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
-                    showsTabCountry === 'IN'
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md'
-                      : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
-                  }`}
+                  onClick={() => setIsXtreamOpen(true)}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 border border-indigo-500/30 flex items-center gap-1.5"
                 >
-                  🇮🇳 India Serials ★
+                  <Zap className="w-3.5 h-3.5" />
+                  Connect Xtream to Unlock On-Demand Series
                 </button>
-                <button
-                  onClick={() => setShowsTabCountry('US')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
-                    showsTabCountry === 'US'
-                      ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50 shadow-md'
-                      : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
-                  }`}
-                >
-                  🇺🇸 US TV Shows ★
-                </button>
-                <button
-                  onClick={() => setShowsTabCountry('all')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                    showsTabCountry === 'all'
-                      ? 'bg-white text-slate-950 font-bold'
-                      : 'bg-white/5 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  🌐 Worldwide
-                </button>
-              </div>
+              )}
             </div>
 
-            {/* Shows Channels Grid */}
-            {showsTabChannels.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {showsTabChannels.map((c) => (
-                  <ChannelCard
-                    key={c.id}
-                    channel={c}
-                    isSelected={selectedChannel?.id === c.id}
-                    isFavorite={favorites.includes(c.id)}
-                    onSelect={() => handleSelectChannel(c)}
-                    onToggleFavorite={(e) => toggleFavorite(c.id, e)}
-                  />
-                ))}
+            {/* View A: On-Demand Xtream Series with Season/Episode picker */}
+            {showsSubTab === 'ondemand' && xtreamAccount?.isActive ? (
+              <div className="space-y-6">
+                {/* Search & Category Filter Header */}
+                <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+                  {/* Search Bar */}
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
+                    <input
+                      type="text"
+                      value={seriesSearchQuery}
+                      onChange={(e) => setSeriesSearchQuery(e.target.value)}
+                      placeholder="Search series (e.g. Bigg Boss, Star Maa, Telugu)..."
+                      className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                    />
+                    {seriesSearchQuery && (
+                      <button
+                        onClick={() => setSeriesSearchQuery('')}
+                        className="absolute right-3 top-2.5 text-slate-400 hover:text-white text-xs font-bold"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Category Pills */}
+                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                    <button
+                      onClick={() => {
+                        setSelectedSeriesCategory('453');
+                        setSeriesSearchQuery('');
+                      }}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border shrink-0 ${
+                        selectedSeriesCategory === '453' && !seriesSearchQuery
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md'
+                          : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      🌟 STAR MAA (Bigg Boss Telugu)
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedSeriesCategory('442');
+                        setSeriesSearchQuery('');
+                      }}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border shrink-0 ${
+                        selectedSeriesCategory === '442' && !seriesSearchQuery
+                          ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 shadow-md'
+                          : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      🎭 COLORS HINDI (Bigg Boss 10)
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedSeriesCategory('276');
+                        setSeriesSearchQuery('');
+                      }}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border shrink-0 ${
+                        selectedSeriesCategory === '276' && !seriesSearchQuery
+                          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-md'
+                          : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      🏆 Reality Shows
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedSeriesCategory('455');
+                        setSeriesSearchQuery('');
+                      }}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border shrink-0 ${
+                        selectedSeriesCategory === '455' && !seriesSearchQuery
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-md'
+                          : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      📺 ZEE TELUGU
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedSeriesCategory('all');
+                        setSeriesSearchQuery('');
+                      }}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all shrink-0 ${
+                        selectedSeriesCategory === 'all' && !seriesSearchQuery
+                          ? 'bg-white text-slate-950 font-bold'
+                          : 'bg-white/5 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      🌐 All Series
+                    </button>
+                  </div>
+                </div>
+
+                {/* Series Grid */}
+                {isLoadingSeries ? (
+                  <div className="text-center py-20 space-y-3">
+                    <div className="w-10 h-10 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                    <h3 className="text-base font-bold text-white">Loading TV series catalog...</h3>
+                  </div>
+                ) : seriesList.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                    {seriesList.map((s) => (
+                      <SeriesCard
+                        key={s.id}
+                        series={s}
+                        onSelect={() => setSelectedSeries(s)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-20 text-slate-400">
+                    <Tv className="w-16 h-16 mx-auto mb-3 opacity-40 text-indigo-400" />
+                    <h3 className="text-lg font-bold text-white">No series found</h3>
+                    <p className="text-xs text-slate-400 mt-1">Try another search keyword or select a different category.</p>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="text-center py-20">
-                <Tv className="w-16 h-16 text-slate-600 mx-auto mb-3" />
-                <h3 className="text-lg font-bold text-white">Loading TV series channels...</h3>
+              /* View B: Live 24/7 Series Channels */
+              <div>
+                {/* Country selector chips */}
+                <div className="flex items-center gap-2 mb-6">
+                  <button
+                    onClick={() => setShowsTabCountry('IN')}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                      showsTabCountry === 'IN'
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md'
+                        : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                    }`}
+                  >
+                    🇮🇳 India Serials ★
+                  </button>
+                  <button
+                    onClick={() => setShowsTabCountry('US')}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                      showsTabCountry === 'US'
+                        ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50 shadow-md'
+                        : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                    }`}
+                  >
+                    🇺🇸 US TV Shows ★
+                  </button>
+                  <button
+                    onClick={() => setShowsTabCountry('all')}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                      showsTabCountry === 'all'
+                        ? 'bg-white text-slate-950 font-bold'
+                        : 'bg-white/5 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    🌐 Worldwide
+                  </button>
+                </div>
+
+                {/* Shows Channels Grid */}
+                {showsTabChannels.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                    {showsTabChannels.map((c) => (
+                      <ChannelCard
+                        key={c.id}
+                        channel={c}
+                        isSelected={selectedChannel?.id === c.id}
+                        isFavorite={favorites.includes(c.id)}
+                        onSelect={() => handleSelectChannel(c)}
+                        onToggleFavorite={(e) => toggleFavorite(c.id, e)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-20">
+                    <Tv className="w-16 h-16 text-slate-600 mx-auto mb-3" />
+                    <h3 className="text-lg font-bold text-white">Loading TV series channels...</h3>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1301,6 +1511,20 @@ export const App: React.FC = () => {
           setActiveTab('movies');
           setIsXtreamOpen(false);
         }}
+        onSwitchToSeries={() => {
+          setActiveTab('shows');
+          setShowsSubTab('ondemand');
+          setIsXtreamOpen(false);
+        }}
+      />
+
+      {/* Series Season & Episode Picker Modal */}
+      <SeriesEpisodeModal
+        series={selectedSeries}
+        xtreamAccount={xtreamAccount}
+        isOpen={!!selectedSeries}
+        onClose={() => setSelectedSeries(null)}
+        onPlayEpisode={handlePlayEpisode}
       />
     </div>
   );

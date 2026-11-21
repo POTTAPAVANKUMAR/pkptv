@@ -9,6 +9,8 @@ import {
   LocalXtreamUser,
   XtreamDownloadTask,
   PlaylistPreset,
+  XtreamSeriesItem,
+  XtreamSeriesInfo,
 } from '../types';
 
 const API_BASE = '/api/v1';
@@ -276,6 +278,42 @@ export const api = {
     if (!res.ok) return [];
     const data = await res.json();
     return data.movies || [];
+  },
+
+  async getXtreamSeriesCategories(server: string, username: string, password: string): Promise<any[]> {
+    const params = new URLSearchParams({ server, username, password });
+    const res = await fetch(`${API_BASE}/xtream/series/categories?${params.toString()}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.categories || [];
+  },
+
+  async getXtreamSeries(
+    server: string,
+    username: string,
+    password: string,
+    categoryId?: string,
+    search?: string
+  ): Promise<XtreamSeriesItem[]> {
+    const params = new URLSearchParams({ server, username, password });
+    if (categoryId && categoryId !== 'all') params.set('category_id', categoryId);
+    if (search && search.trim()) params.set('search', search.trim());
+    const res = await fetch(`${API_BASE}/xtream/series?${params.toString()}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.series || [];
+  },
+
+  async getXtreamSeriesInfo(
+    server: string,
+    username: string,
+    password: string,
+    seriesId: string | number
+  ): Promise<XtreamSeriesInfo | null> {
+    const params = new URLSearchParams({ server, username, password });
+    const res = await fetch(`${API_BASE}/xtream/series/${seriesId}?${params.toString()}`);
+    if (!res.ok) return null;
+    return res.json();
   },
 
   async getXtreamLiveStreams(

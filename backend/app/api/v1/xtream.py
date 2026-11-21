@@ -59,6 +59,51 @@ async def get_upstream_vod_streams(
     return {"movies": movies}
 
 
+# =========================================================================
+# Upstream TV Series & Episode Browsing
+# =========================================================================
+@router.get("/series/categories")
+async def get_upstream_series_categories(
+    server: str = Query(...),
+    username: str = Query(...),
+    password: str = Query(...),
+):
+    """Fetch TV series categories from the connected Xtream Codes server."""
+    cats = await xtream_service.get_upstream_series_categories(
+        server=server, user=username, password=password
+    )
+    return {"categories": cats}
+
+
+@router.get("/series")
+async def get_upstream_series(
+    server: str = Query(...),
+    username: str = Query(...),
+    password: str = Query(...),
+    category_id: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+):
+    """Fetch TV series list from the connected Xtream Codes server."""
+    series = await xtream_service.get_upstream_series(
+        server=server, user=username, password=password, category_id=category_id, search=search
+    )
+    return {"series": series}
+
+
+@router.get("/series/{series_id}")
+async def get_upstream_series_info(
+    series_id: str,
+    server: str = Query(...),
+    username: str = Query(...),
+    password: str = Query(...),
+):
+    """Fetch seasons and episodes with direct stream URLs for a specific TV series."""
+    info = await xtream_service.get_upstream_series_info(
+        server=server, user=username, password=password, series_id=series_id
+    )
+    return info
+
+
 @router.get("/live/streams")
 async def get_upstream_live_streams(
     server: str = Query(...),

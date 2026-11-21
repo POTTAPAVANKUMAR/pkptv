@@ -176,3 +176,40 @@ export interface PlaylistPreset {
   channel_count?: string;
 }
 
+export interface XtreamSeriesItem {
+  id: string;
+  series_id: string | number;
+  title: string;
+  name: string;
+  poster: string;
+  backdrop?: string;
+  rating?: string;
+  year?: string;
+  plot?: string;
+  cast?: string;
+  genre?: string;
+  category_id?: string;
+}
+
+export interface XtreamEpisode {
+  id: string | number;
+  episode_num: number;
+  title: string;
+  container_extension: string;
+  info?: {
+    plot?: string;
+    duration_secs?: number;
+    duration?: string;
+    movie_image?: string;
+    releasedate?: string;
+  };
+  stream_url: string;
+}
+
+export interface XtreamSeriesInfo {
+  info: any;
+  seasons: any[];
+  episodes: Record<string, XtreamEpisode[]>;
+}
+
+

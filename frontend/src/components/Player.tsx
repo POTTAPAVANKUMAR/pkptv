@@ -78,7 +78,8 @@ export const Player: React.FC<PlayerProps> = ({
     channel.stream_url.includes(':8000') ||
     channel.stream_url.includes(':25461') ||
     channel.stream_url.includes('/live/') ||
-    channel.stream_url.includes('/movie/');
+    channel.stream_url.includes('/movie/') ||
+    channel.stream_url.includes('/series/');
   const [useProxy, setUseProxy] = useState<boolean>(shouldDefaultToProxy);
   const [qualities, setQualities] = useState<{ id: number; height: number; bitrate: number }[]>([]);
   const [selectedQuality, setSelectedQuality] = useState<number>(-1); // -1 = Auto
@@ -137,6 +138,7 @@ export const Player: React.FC<PlayerProps> = ({
     channel.stream_url.toLowerCase().includes('.mkv') ||
     channel.stream_url.toLowerCase().includes('.webm') ||
     channel.stream_url.includes('/movie/') ||
+    channel.stream_url.includes('/series/') ||
     channel.stream_url.includes('/vod/stream/');
 
   const handleToggleDvr = async () => {
@@ -201,6 +203,7 @@ export const Player: React.FC<PlayerProps> = ({
       streamUrl.toLowerCase().includes('.mkv') ||
       streamUrl.toLowerCase().includes('.webm') ||
       streamUrl.includes('/movie/') ||
+      streamUrl.includes('/series/') ||
       streamUrl.includes('/vod/stream/');
 
     if (isDirectVideo) {

@@ -24,6 +24,7 @@ interface XtreamModalProps {
   onSaveAccount: (account: XtreamAccount | null) => void;
   onLoadLiveChannels?: (channels: Channel[], name: string) => void;
   onSwitchToMovies?: () => void;
+  onSwitchToSeries?: () => void;
 }
 
 export const XtreamModal: React.FC<XtreamModalProps> = ({
@@ -33,6 +34,7 @@ export const XtreamModal: React.FC<XtreamModalProps> = ({
   onSaveAccount,
   onLoadLiveChannels,
   onSwitchToMovies,
+  onSwitchToSeries,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'provider' | 'server'>('provider');
 
@@ -392,19 +394,19 @@ export const XtreamModal: React.FC<XtreamModalProps> = ({
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                     <button
                       type="button"
                       onClick={handleLoadLiveChannels}
                       disabled={isLoadingLive}
-                      className="py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-600/30 disabled:opacity-50"
+                      className="py-3 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-600/30 disabled:opacity-50"
                     >
                       {isLoadingLive ? (
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       ) : (
                         <Play className="w-4 h-4 fill-current" />
                       )}
-                      <span>{isLoadingLive ? 'Loading Live TV...' : 'Watch Live Channels Now'}</span>
+                      <span>{isLoadingLive ? 'Loading...' : 'Live Channels'}</span>
                     </button>
 
                     <button
@@ -413,10 +415,22 @@ export const XtreamModal: React.FC<XtreamModalProps> = ({
                         onSwitchToMovies?.();
                         onClose();
                       }}
-                      className="py-3 px-4 rounded-xl bg-purple-600/80 hover:bg-purple-600 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-purple-600/30"
+                      className="py-3 px-3 rounded-xl bg-purple-600/80 hover:bg-purple-600 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-purple-600/30"
                     >
                       <Film className="w-4 h-4" />
-                      <span>Browse Xtream Movies (VOD)</span>
+                      <span>Movies (VOD)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSwitchToSeries?.();
+                        onClose();
+                      }}
+                      className="py-3 px-3 rounded-xl bg-indigo-600/80 hover:bg-indigo-600 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-600/30"
+                    >
+                      <Tv className="w-4 h-4" />
+                      <span>TV Series (Episodes)</span>
                     </button>
                   </div>
                 </div>
